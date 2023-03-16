@@ -98,8 +98,8 @@ lang PMExprExtractAccelerate = PMExprAst + MExprExtract
     let env : AddIdentifierAccelerateEnv = env in
     (env.functions, t)
 
-  sem addIdentifierToAccelerateTermsH (env : AddIdentifierAccelerateEnv) =
-  | TmAccelerate t ->
+  sem replaceTermWithLet (env : AddIdentifierAccelerateEnv) =
+  | t ->
     let accelerateIdent = getUniqueIdentifier env.programIdentifiers in
     let bytecodeIdent = getUniqueIdentifier env.programIdentifiers in
     let retType = t.ty in
@@ -107,31 +107,34 @@ lang PMExprExtractAccelerate = PMExprAst + MExprExtract
     let paramId = nameSym "x" in
     let paramTy = TyInt {info = info} in
     let functionData : AccelerateData = {
-      identifier = accelerateIdent,
-      bytecodeWrapperId = bytecodeIdent,
-      params = [(paramId, paramTy)],
-      paramCopyStatus = [CopyBoth ()],
-      returnType = retType,
-      info = info} in
+    identifier = accelerateIdent,
+    bytecodeWrapperId = bytecodeIdent,
+    params = [(paramId, paramTy)],
+    paramCopyStatus = [CopyBoth ()],
+    returnType = retType,
+    info = info} in
     let env = {env with functions = mapInsert accelerateIdent functionData env.functions} in
     let funcType = TyArrow {from = paramTy, to = retType, info = info} in
     let accelerateLet =
-      TmLet {
-        ident = accelerateIdent,
-        tyAnnot = funcType,
-        tyBody = funcType,
-        body = TmLam {
-          ident = paramId, tyAnnot = paramTy, tyIdent = paramTy, body = t.e,
-          ty = TyArrow {from = paramTy, to = retType, info = info},
-          info = info},
-        inexpr = TmApp {
-          lhs = TmVar {ident = accelerateIdent, ty = funcType, info = info, frozen = false},
-          rhs = TmConst {val = CInt {val = 0}, ty = paramTy, info = info},
-          ty = retType,
-          info = info},
-        ty = retType, info = info}
+    TmLet {
+      ident = accelerateIdent,
+      tyAnnot = funcType,
+      tyBody = funcType,
+      body = TmLam {
+        ident = paramId, tyAnnot = paramTy, tyIdent = paramTy, body = t.e,
+        ty = TyArrow {from = paramTy, to = retType, info = info},
+        info = info},
+      inexpr = TmApp {
+        lhs = TmVar {ident = accelerateIdent, ty = funcType, info = info, frozen = false},
+        rhs = TmConst {val = CInt {val = 0}, ty = paramTy, info = info},
+        ty = retType,
+        info = info},
+      ty = retType, info = info}
     in
     (env, accelerateLet)
+
+  sem addIdentifierToAccelerateTermsH (env : AddIdentifierAccelerateEnv) =
+  | TmAccelerate t -> replaceTermWithLet env t
   | t -> smapAccumL_Expr_Expr addIdentifierToAccelerateTermsH env t
 
   -- Construct an extracted AST from the given AST, containing all terms that
