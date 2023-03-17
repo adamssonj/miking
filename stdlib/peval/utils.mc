@@ -74,6 +74,17 @@ lang PEvalUtils = PEvalAst + PEvalInclude
   sem tyIntName : PEvalNames -> Name
   sem tyIntName = | names -> match getName (names.tyConsNames) "IntTypeAst_TyInt" with
                              Some t then t else error "TyInt not found"
+  sem tyBoolName : PEvalNames -> Name
+  sem tyBoolName = | names -> match getName (names.tyConsNames) "BoolTypeAst_TyBool" with
+                             Some t then t else error "TyBool not found"
+
+  sem tyFloatName : PEvalNames -> Name
+  sem tyFloatName = | names -> match getName (names.tyConsNames) "FloatTypeAst_TyFloat" with
+                             Some t then t else error "TyFloat not found"
+
+  sem tyCharName : PEvalNames -> Name
+  sem tyCharName = | names -> match getName (names.tyConsNames) "CharTypeAst_TyChar" with
+                             Some t then t else error "TyChar not found"
 
   sem tyUnknownName : PEvalNames -> Name
   sem tyUnknownName = | names -> match getName (names.tyConsNames) "UnknownTypeAst_TyUnknown"
