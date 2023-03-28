@@ -56,6 +56,7 @@ lang PEvalCompile = PEvalAst + MExprPEval + MExprKCFA +
 
   sem pevalPass : PEvalNames -> Map Name Expr -> Expr -> Expr
   sem pevalPass pnames lib =
+  -- TODO recLet
   | TmLet ({ident=id, body=body, inexpr=inexpr, ty=ty, info=info} & t) ->
     let b = pevalPass pnames lib body in
     let lib = insertToLib lib id b in
@@ -82,7 +83,7 @@ lang PEvalCompile = PEvalAst + MExprPEval + MExprKCFA +
     -- Find the names of the functions and constructors needed later
     let names = createNames ast pevalNames in
     let ast = pevalPass names (mapEmpty nameCmp) ast in
-    let ast = typeCheck ast in
+    let ast = typeCheck ast in -- TODO: temporary fix
     printLn (mexprToString ast);
     ast
 end
@@ -133,6 +134,13 @@ let distinctCalls = preprocess (bindall_ [
     ulet_ "p" (lam_ "x" intseq (peval_ (var_ "x"))),
     ulet_ "k" (app_ (var_ "p") (seq_ [int_ 1, int_ 2])),
     unit_
+]) in
+
+let t = tyrecord_ [("a", tyint_), ("b", tyint_)] in
+
+let distinctCalls = preprocess (bindall_ [
+    ulet_ "p" (lam_ "x" t (peval_ (var_ "x"))),
+    ulet_ "k" (app_ (var_ "p") (urecord_ [("a",int_ 1), ("b", int_ 1)]))
 ]) in
 
 match compilePEval distinctCalls with ast in
