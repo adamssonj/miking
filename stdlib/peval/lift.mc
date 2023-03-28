@@ -163,8 +163,7 @@ lang PEvalLiftRecord = PEvalLift + RecordAst
   | TmRecord {bindings = binds, info=info, ty = typ} ->
     let binSeq = mapToSeq binds in
     let f = lam x:String. app_ (nvar_ (stringToSidName names)) (str_ x) in
-    let tostring = sidToString in
-    let exprs =  seq_ (map (lam x. utuple_ [f (tostring x.0), liftExpr names x.1])
+    let exprs =  seq_ (map (lam x. utuple_ [f (sidToString x.0), liftExpr names x.1])
                     binSeq) in
     let lhs = nvar_ (mapFromSeqName names) in
     -- cmpSID = subi
