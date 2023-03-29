@@ -1,11 +1,3 @@
--- Include here all the lifting that is now performed inside compile.mc
--- Not sure yet whether to include the name handling
--- That should probably go in a different file, or utils?
---
---
--- Should also make sure that every lift works as expected by having at least one test per
--- constructor here
---
 
 include "peval/extract.mc"
 include "peval/ast.mc"
@@ -71,6 +63,12 @@ lang PEvalLift = PEvalAst + PEvalUtils + MExprAst + ClosAst
     let name = liftName names tup.0 in
     let expr = liftExpr names tup.1 in
     utuple_ [name, expr]
+
+
+  sem liftStringToSID : PEvalNames -> String -> Expr
+  sem liftStringToSID names = | x ->
+   app_ (nvar_ (stringToSidName names)) (str_ x)
+
 end
 
 lang PEvalLiftApp = PEvalLift + AppAst
@@ -105,40 +103,38 @@ lang PEvalLiftVar = PEvalLift + VarAst
         let bindings = [("tms", tms)] in
         Some (createConAppExpr names tmSeqName bindings ty info)
     else None () -- We don't know how to lift element types
-  | TyRecord {info=info, fields=fields} & typ->
+  | TyRecord {info=info, fields=fields} & typ ->
     -- fields : Map SID Type
-    let rec = TmVar {ident = varName, ty=typ, info = NoInfo (),
+    let rec = TmVar {ident = varName, ty = typ, info = NoInfo (),
                     frozen = false} in
-    -- TmRec {
-    --      bindings = Map SID Expr
-    --      mapFromSeq [(SID, TmConst {CInt 1})]
-    --      } 
 
-    --zipWith (lam x. f. (x.0, f x.1)) (mapToSeq x) (convs)
 
-    let seq = mapToSeq fields in -- [(sid, type)]
-    None ()
-    
---    let types = setToSeq (foldr (lam x. lam acc. setInsert (x.1) acc) 
---                (setEmpty cmpType) seq) in
---    let liftType = map (lam x. (x, liftViaType names lib (nameNoSym "x") x)) types in
+    let seqFields = mapToSeq fields in
+    let patternList = map (lam x. let s = sidToString x.0 in
+                        (s, pvar_ s)) seqFields in
 
-    -- [(SID, convFunc)]
-    
---    let liftSeq = map (lam x. (x.0,
---                 liftViaType names lib (nameNoSym "x") x.1)) seq in
---    -- Maybe we can do it for some only? Not 
---    if any (lam x. optionIsNone x.1) liftSeq then None ()
---    else 
---    let convMap = mapFromSeq liftSeq in
---    -- 1. Create TmRecord of convMap
---    -- 2. Do mapIntersectWith
---    let mapintersect = nvar_ (mapIntersectWithName names) in
---
---    let inter = ulam_ "val" (ulam_ "convf" (app_ (var_ "convf") (var_ "val"))) in
---
---    let combine = appf3_ mapintersect inter rec convMap in
-    
+    let pat = prec_ patternList in
+    -- Create one lifted type per record entry
+    -- Should probably do it only once per type, and map id -> typelift
+    let seqFieldsWithLift = map (lam x. (x.0, x.1,
+                 liftViaType names lib (nameNoSym "x") x.1)) seqFields in
+
+    -- If we cannot lift any of the present types
+    if any (lam x. optionIsNone x.2) seqFieldsWithLift then None ()
+    else
+
+    let s = seq_ (map (lam x.
+      let s = sidToString x.0 in
+      match x.2 with Some t in
+        let convert = (lam_ "x" x.1 t) in
+        let liftedType = app_ convert (var_ s) in
+        utuple_ [liftStringToSID names s, liftedType]) seqFieldsWithLift)
+      in
+    let thn = appf2_ (nvar_ (mapFromSeqName names)) (uconst_ (CSubi ())) s in
+    let mbind = matchex_ rec pat thn in
+
+    let bindings = [("bindings", mbind)] in
+    Some (createConAppExpr names tmRecName bindings typ info)
 
   | ty ->
     match mapLookup varName lib with Some t then
@@ -162,9 +158,9 @@ lang PEvalLiftRecord = PEvalLift + RecordAst
   sem liftExpr names =
   | TmRecord {bindings = binds, info=info, ty = typ} ->
     let binSeq = mapToSeq binds in
-    let f = lam x:String. app_ (nvar_ (stringToSidName names)) (str_ x) in
-    let exprs =  seq_ (map (lam x. utuple_ [f (sidToString x.0), liftExpr names x.1])
-                    binSeq) in
+    let exprs =  seq_ (map (lam x. utuple_
+                      [liftStringToSID names (sidToString x.0), liftExpr names x.1])
+                      binSeq) in
     let lhs = nvar_ (mapFromSeqName names) in
     -- cmpSID = subi
     let rhs = (uconst_ (CSubi ())) in
