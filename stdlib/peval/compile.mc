@@ -71,8 +71,11 @@ lang PEvalCompile = PEvalAst + MExprPEval + MExprKCFA +
     let env = buildEnv pnames lib mp in
     let liftedEnv = liftConsList pnames env in
     let lhs = nvar_ (pevalName pnames) in
-    appf2_ lhs liftedEnv arg
-    -- semi_ peval never_
+    let f = appf2_ lhs liftedEnv arg in
+    let p = nvar_ (mexprStringName pnames) in
+    let ff = app_ p f in
+    let fff = print_ ff in
+     semi_ fff never_
   | t -> smap_Expr_Expr (pevalPass pnames lib) t
 
   sem compilePEval =
@@ -83,7 +86,7 @@ lang PEvalCompile = PEvalAst + MExprPEval + MExprKCFA +
     -- Find the names of the functions and constructors needed later
     let names = createNames ast pevalNames in
     let ast = pevalPass names (mapEmpty nameCmp) ast in
-    let ast = typeCheck ast in -- TODO: temporary fix
+    --let ast = typeCheck ast in -- TODO: temporary fix
     printLn (mexprToString ast);
     ast
 end
@@ -136,11 +139,11 @@ let distinctCalls = preprocess (bindall_ [
     unit_
 ]) in
 
-let t = tyrecord_ [("a", tyint_), ("b", tyint_)] in
+let t = tyrecord_ [("a", tyint_), ("b", tyfloat_)] in
 
 let distinctCalls = preprocess (bindall_ [
     ulet_ "p" (lam_ "x" t (peval_ (var_ "x"))),
-    ulet_ "k" (app_ (var_ "p") (urecord_ [("a",int_ 1), ("b", int_ 1)]))
+    ulet_ "k" (app_ (var_ "p") (urecord_ [("a",int_ 1), ("b", float_ 1.0)]))
 ]) in
 
 match compilePEval distinctCalls with ast in
