@@ -63,8 +63,15 @@ lang PEvalCompile = PEvalAst + MExprPEval + MExprKCFA +
     let inx = pevalPass pnames lib inexpr in
     TmLet {t with body=b,
                   inexpr=inx}
+  | TmRecLets ({bindings=bindings, inexpr=inexpr, ty=ty, info=info} & t) ->
+    let bindings = map (lam rl:RecLetBinding.
+                    {rl with body=pevalPass pnames lib rl.body}) bindings in
+    let lib = foldl (lam lib. lam rl.
+                    mapInsert rl.ident rl.body lib) lib bindings in
+    let inx = pevalPass pnames lib inexpr in
+    TmRecLets {t with inexpr=inx, bindings=bindings}
   | TmPEval {e=e, info=info} & pe ->
-    let arg = liftExpr pnames e in
+    let arg = liftExpr pnames lib e in
     -- From /mexpr/cfa.mc
     let fv = freeVars (setEmpty nameCmp) e in
     let mp = getTypesOfVars fv (mapEmpty nameCmp) e in
@@ -75,7 +82,7 @@ lang PEvalCompile = PEvalAst + MExprPEval + MExprKCFA +
     let p = nvar_ (mexprStringName pnames) in
     let ff = app_ p f in
     let fff = print_ ff in
-     semi_ fff never_
+    semi_ fff never_
   | t -> smap_Expr_Expr (pevalPass pnames lib) t
 
   sem compilePEval =
