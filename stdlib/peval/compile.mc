@@ -12,12 +12,11 @@ include "set.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/type-annot.mc"
-include "mexpr/cfa.mc" -- only for freevariables
 include "mexpr/boot-parser.mc"
 
 
-lang PEvalCompile = PEvalAst + MExprPEval + MExprKCFA +
-                    ClosAst + MExprAst + PEvalInclude + PEvalLiftMExpr
+lang PEvalCompile = PEvalAst + MExprPEval + ClosAst + MExprAst
+                    + PEvalInclude + PEvalLiftMExpr
 
   -- Creates a library of the expressions that the element of specialization depends on
   sem createLib (lib : Map Name Expr) (pevalIds : Map Name PEvalData) =
@@ -33,26 +32,6 @@ lang PEvalCompile = PEvalAst + MExprPEval + MExprKCFA +
   sem insertToLib lib name =
   | TmLam t & lm -> mapInsert name lm lib
   | _ -> lib
-
-  sem getTypesOfVars : Set Name -> Map Name Type -> Expr -> Map Name Type
-  sem getTypesOfVars freeVars varMapping =
-  | TmVar {ident=id, ty=ty} ->
-    if setMem id freeVars then mapInsert id ty varMapping
-    else varMapping
-  | ast -> sfold_Expr_Expr (getTypesOfVars freeVars) varMapping ast
-
-  sem gg : PEvalNames -> Map Name Expr ->
-           List Expr -> Name -> Type -> List Expr
-  sem gg names lib ls id =
-  | typ ->
-    match liftViaType names lib id typ with Some expr then
-    listCons (utuple_ [liftName names id, expr]) ls
-    else ls
-
-  sem buildEnv : PEvalNames -> Map Name Expr
-                -> Map Name Type -> List Expr
-  sem buildEnv names lib =
-  | fvs -> mapFoldWithKey (gg names lib) listEmpty fvs
 
   sem pevalPass : PEvalNames -> Map Name Expr -> Expr -> Expr
   sem pevalPass pnames lib =
@@ -71,12 +50,8 @@ lang PEvalCompile = PEvalAst + MExprPEval + MExprKCFA +
     let inx = pevalPass pnames lib inexpr in
     TmRecLets {t with inexpr=inx, bindings=bindings}
   | TmPEval {e=e, info=info} & pe ->
-    let arg = liftExpr pnames lib e in
-    -- From /mexpr/cfa.mc
-    let fv = freeVars (setEmpty nameCmp) e in
-    let mp = getTypesOfVars fv (mapEmpty nameCmp) e in
-    let env = buildEnv pnames lib mp in
-    let liftedEnv = liftConsList pnames env in
+    let arg = liftExpr pnames lib false e in
+    let liftedEnv = getLiftedEnv pnames lib [] e in
     let lhs = nvar_ (pevalName pnames) in
     let f = appf2_ lhs liftedEnv arg in
     let p = nvar_ (mexprStringName pnames) in
@@ -94,7 +69,7 @@ lang PEvalCompile = PEvalAst + MExprPEval + MExprKCFA +
     let names = createNames ast pevalNames in
     let ast = pevalPass names (mapEmpty nameCmp) ast in
     --let ast = typeCheck ast in -- TODO: temporary fix
-    printLn (mexprToString ast);
+    --printLn (mexprToString ast);
     ast
 end
 
@@ -151,6 +126,13 @@ let t = tyrecord_ [("a", tyint_), ("b", tyfloat_)] in
 let distinctCalls = preprocess (bindall_ [
     ulet_ "p" (lam_ "x" t (peval_ (var_ "x"))),
     ulet_ "k" (app_ (var_ "p") (urecord_ [("a",int_ 1), ("b", float_ 1.0)]))
+]) in
+
+let distinctCalls = preprocess (bindall_ [
+  ulet_ "bar" (ulam_ "x" (ulam_ "y" (subi_ (var_ "x") (var_ "y")))),
+--  ulet_ "foo" (ulam_ "x" (ulam_ "y" (addi_ (appf2_ (var_ "bar") (var_ "x") (var_ "y")) 
+--    (var_ "y")))),
+  peval_ (app_ (var_ "bar") (int_ 1))
 ]) in
 
 match compilePEval distinctCalls with ast in
