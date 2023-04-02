@@ -30,35 +30,40 @@ lang PEvalCompile = PEvalAst + MExprPEval + ClosAst + MExprAst
 
   sem insertToLib : Map Name Expr -> Name -> Expr -> Map Name Expr
   sem insertToLib lib name =
-  | TmLam t & lm -> mapInsert name lm lib
-  | _ -> lib
+  | t -> mapInsert name t lib
+--  | TmLam t & lm -> mapInsert name lm lib
+--  | _ -> lib
 
-  sem pevalPass : PEvalNames -> Map Name Expr -> Expr -> Expr
-  sem pevalPass pnames lib =
-  -- TODO recLet
+  sem pevalPass : PEvalNames -> Map Name Expr -> Map Name Name ->
+                  Expr -> (Map Name Name, Expr)
+  sem pevalPass pnames lib idMap =
   | TmLet ({ident=id, body=body, inexpr=inexpr, ty=ty, info=info} & t) ->
-    let b = pevalPass pnames lib body in
+    match pevalPass pnames lib idMap body with (idMap, b) in
     let lib = insertToLib lib id b in
-    let inx = pevalPass pnames lib inexpr in
-    TmLet {t with body=b,
-                  inexpr=inx}
+    match pevalPass pnames lib idMap inexpr with (idMap, inx) in
+    (idMap, TmLet {t with body=b, inexpr=inx})
   | TmRecLets ({bindings=bindings, inexpr=inexpr, ty=ty, info=info} & t) ->
-    let bindings = map (lam rl:RecLetBinding.
-                    {rl with body=pevalPass pnames lib rl.body}) bindings in
+    let binds = mapAccumL (lam idMap. lam rl:RecLetBinding.
+        match pevalPass pnames lib idMap rl.body with (idMap, b) in
+        let recl = {rl with body = b} in
+        (idMap, recl)) idMap bindings in
+
+    match binds with (idMap, bindings) in
     let lib = foldl (lam lib. lam rl.
-                    mapInsert rl.ident rl.body lib) lib bindings in
-    let inx = pevalPass pnames lib inexpr in
-    TmRecLets {t with inexpr=inx, bindings=bindings}
+                    insertToLib lib rl.ident rl.body) lib bindings in
+    match pevalPass pnames lib idMap inexpr with (idMap, inx) in
+    (idMap, TmRecLets {t with inexpr=inx, bindings=bindings})
   | TmPEval {e=e, info=info} & pe ->
-    let arg = liftExpr pnames lib false e in
-    let liftedEnv = getLiftedEnv pnames lib [] e in
+    let args = initArgs lib idMap in
+    match liftExpr pnames args e with (args, pevalArg) in
+    match getLiftedEnv pnames args [] e with (args, liftedEnv) in
     let lhs = nvar_ (pevalName pnames) in
-    let f = appf2_ lhs liftedEnv arg in
+    let f = appf2_ lhs liftedEnv pevalArg in
     let p = nvar_ (mexprStringName pnames) in
     let ff = app_ p f in
     let fff = print_ ff in
-    semi_ fff never_
-  | t -> smap_Expr_Expr (pevalPass pnames lib) t
+    (args.idMapping, semi_ fff never_)
+  | t -> smapAccumL_Expr_Expr (pevalPass pnames lib) idMap t
 
   sem compilePEval =
   | origAst ->
@@ -67,9 +72,13 @@ lang PEvalCompile = PEvalAst + MExprPEval + ClosAst + MExprAst
     match includeConstructors ast with ast in
     -- Find the names of the functions and constructors needed later
     let names = createNames ast pevalNames in
-    let ast = pevalPass names (mapEmpty nameCmp) ast in
-    --let ast = typeCheck ast in -- TODO: temporary fix
-    --printLn (mexprToString ast);
+    match pevalPass names (mapEmpty nameCmp) (mapEmpty nameCmp) ast with (idMapping, ast) in
+    let symDefs = bindall_ (map (lam n:Name. nulet_ n (gensym_ uunit_))
+                (mapValues idMapping)) in
+    let ast = bindall_ [
+        symDefs,
+        ast] in
+    printLn (mexprToString ast);
     ast
 end
 
@@ -133,6 +142,21 @@ let distinctCalls = preprocess (bindall_ [
 --  ulet_ "foo" (ulam_ "x" (ulam_ "y" (addi_ (appf2_ (var_ "bar") (var_ "x") (var_ "y")) 
 --    (var_ "y")))),
   peval_ (app_ (var_ "bar") (int_ 1))
+]) in
+
+
+let distinctCalls = preprocess (bindall_ [
+  ulet_ "bar" (ulam_ "x" (ulam_ "y" (subi_ (var_ "x") (var_ "y")))),
+--  ulet_ "foo" (ulam_ "x" (ulam_ "y" (addi_ (appf2_ (var_ "bar") (var_ "x") (var_ "y"))
+--    (var_ "y")))),
+  peval_ (app_ (var_ "bar") (int_ 1))
+]) in
+
+
+let distinctCalls = preprocess (bindall_ [
+  ulet_ "foo" (ulam_ "x" (ulam_ "y" (subi_ (var_ "x") (var_ "y")))),
+  ulet_ "bar" (app_ (var_ "foo") (int_ 3)),
+  ulet_ "bars" (peval_ (var_ "bar"))
 ]) in
 
 match compilePEval distinctCalls with ast in

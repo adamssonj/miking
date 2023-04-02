@@ -8,18 +8,25 @@ include "mexpr/eval.mc"
 include "mexpr/cfa.mc" -- only for freevariables
 
 include "list.mc"
+include "seq.mc"
 include "set.mc"
 include "string.mc"
 include "stringid.mc"
 include "error.mc"
 
-
 lang PEvalLift = PEvalAst + PEvalUtils + MExprAst + ClosAst
+
+  type LiftResult = (PEvalArgs, Expr)
 
   -- liftExpr should produce an Expr s.t. when evaluated produces its original input argument
   -- In that sense liftExpr can be considered an inverse of 'eval'
-  sem liftExpr : PEvalNames -> Map Name Expr -> Bool -> Expr -> Expr
-  sem liftExpr names lib closing = | t -> printLn "Don't know how to lift this yet!"; t
+  sem liftExpr : PEvalNames -> PEvalArgs -> Expr -> LiftResult
+  sem liftExpr names args = | t -> printLn "Don't know how to lift this yet!"; (args, t)
+
+  sem liftExprAccum : PEvalNames -> PEvalArgs -> [Expr] ->
+                      (PEvalArgs, [Expr])
+  sem liftExprAccum names args =
+  | xs -> mapAccumL (lam args. lam e. liftExpr names args e) args xs
 
   sem createConApp : PEvalNames ->  (PEvalNames -> Name)
                     -> [(String, Expr)] -> Type
@@ -33,7 +40,6 @@ lang PEvalLift = PEvalAst + PEvalUtils + MExprAst + ClosAst
   | info -> let bindings = cons ("info", liftInfo names info) bindings in
             createConApp names getName bindings typ
 
-
   sem createConAppExpr names getName bindings typ =
   | info -> let bindings = cons ("ty", liftType names typ) bindings in
             createConAppInfo names getName bindings typ info
@@ -46,14 +52,15 @@ lang PEvalLift = PEvalAst + PEvalUtils + MExprAst + ClosAst
   sem tyConInfo : Type -> (Info, (PEvalNames -> Name))
   sem tyConInfo =
   | TyUnknown {info = info} -> (info, tyUnknownName) 
-  -- | TyArrow {info = info, from = from, to = to} -> (info, tyArrowName)
   | t -> printLn "Don't know how to lift this type"; (NoInfo(), tyUnknownName)
 
-  sem liftName : PEvalNames -> (String, Symbol) -> Expr
-  sem liftName names = | tup ->
-    --TODO(adamssonj, 2023-03-30): Should try to preserve the symbol
-    let nosym = nvar_ (noSymbolName names) in
-    utuple_ [str_ tup.0, symb_ tup.1]
+  sem liftName : PEvalArgs -> Name -> LiftResult
+  sem liftName args = | name ->
+    match mapLookup name args.idMapping with Some t then
+      (args, utuple_ [str_ name.0, nvar_ t])
+    else let idm = nameSym "idm" in
+      let args = {args with idMapping = mapInsert name idm args.idMapping} in
+      (args, utuple_ [str_ name.0, nvar_ idm])
 
   sem liftInfo : PEvalNames -> Info -> Expr
   sem liftInfo names =
@@ -68,12 +75,11 @@ end
 
 lang PEvalLiftApp = PEvalLift + AppAst
 
-  sem liftExpr names lib closing =
+  sem liftExpr names args =
   | TmApp {lhs = lhs, rhs = rhs, info = info, ty=typ} ->
-    let lhs = liftExpr names lib closing lhs in -- Should be either TmVar or TmConst
-    let rhs = liftExpr names lib closing rhs in
+    match liftExprAccum names args [lhs, rhs] with (args, [lhs, rhs]) in
     let bindings = [("lhs", lhs), ("rhs", rhs)] in
-    createConAppExpr names tmAppName bindings typ info
+    (args, createConAppExpr names tmAppName bindings typ info)
 
   sem tyConInfo =
   | TyApp {info = info, lhs = lhs, rhs=rhs} -> (info, tyAppName)
@@ -81,8 +87,20 @@ end
 
 lang PEvalLiftVar = PEvalLift + VarAst
 
-  sem liftViaType : PEvalNames -> Map Name Expr -> Name -> Type -> Option Expr
-  sem liftViaType names lib varName =
+  sem liftViaType : PEvalNames -> PEvalArgs -> Name -> Type -> Option LiftResult
+  sem liftViaType names args varName =
+  | t & (TyInt _ | TySeq _ | TyRecord _) ->
+    match liftViaTypeH names varName t with Some t then Some (args, t)
+    else None ()
+  | ty ->
+    match mapLookup varName args.lib with Some t then
+      let args = updateClosing args false in
+      Some (liftExpr names args t)
+    else None ()
+
+  -- NOTE(adamssonj, 2023-03-31): Can't do anything with e.g. [(a->b)] aon
+  sem liftViaTypeH : PEvalNames -> Name -> Type -> Option Expr
+  sem liftViaTypeH names varName =
   | TyInt {info = info} & typ ->
     let lv = TmVar {ident = varName, ty=typ, info = NoInfo (), frozen = false} in
     let bindings = [("val", lv)] in
@@ -93,7 +111,7 @@ lang PEvalLiftVar = PEvalLift + VarAst
     let sq = TmVar {ident = varName, ty=typ, info = NoInfo (),
                     frozen = false} in
     -- TODO: Should not be unsymbolized "x"
-    match liftViaType names lib (nameNoSym "x") ty with Some t then
+    match liftViaTypeH names (nameNoSym "x") ty with Some t then
         let convert = (lam_ "x" ty t) in
         let tms = map_ convert sq in
         let bindings = [("tms", tms)] in
@@ -112,7 +130,7 @@ lang PEvalLiftVar = PEvalLift + VarAst
     -- Create one lifted type per record entry
     -- Should probably do it only once per type, and map id -> typelift
     let seqFieldsWithLift = map (lam x. (x.0, x.1,
-                 liftViaType names lib (nameNoSym "x") x.1)) seqFields in
+                 liftViaTypeH names (nameNoSym "x") x.1)) seqFields in
 
     -- If we cannot lift any of the present types
     if any (lam x. optionIsNone x.2) seqFieldsWithLift then None ()
@@ -130,18 +148,15 @@ lang PEvalLiftVar = PEvalLift + VarAst
 
     let bindings = [("bindings", mbind)] in
     Some (createConAppExpr names tmRecName bindings typ info)
+  | t -> None ()
 
-  | ty ->
-    match mapLookup varName lib with Some t then
-      Some (liftExpr names lib false t)
-    else
-      None () -- We don't know how to lift this type and don't have its def.
 
-  sem liftExpr names lib closing =
+  sem liftExpr names args =
   | TmVar {ident = id, ty = typ, info = info, frozen = frozen} ->
-    let bindings = [("ident", liftName names id),
+    match liftName args id with (args, lIdent) in
+    let bindings = [("ident", lIdent),
                     ("frozen", bool_ frozen)] in
-    createConAppExpr names tmVarName bindings typ info
+    (args, createConAppExpr names tmVarName bindings typ info)
 
   sem tyConInfo =
   | TyVar {info = info, ident = id, level = lv} -> (info, tyVarName)
@@ -150,31 +165,27 @@ end
 
 lang PEvalLiftRecord = PEvalLift + RecordAst
 
-  sem liftExpr names lib closing =
+  sem liftExpr names args =
   | TmRecord {bindings = binds, info=info, ty = typ} ->
-    let binSeq = mapToSeq binds in
+    match unzip (mapToSeq binds) with (ids, exprs) in
+    match liftExprAccum names args exprs with (args, lExprs) in
+    let binSeq = zip ids lExprs in
     let exprs =  seq_ (map (lam x. utuple_
-                      [liftStringToSID names (sidToString x.0), liftExpr names lib closing x.1])
-                      binSeq) in
+      [liftStringToSID names (sidToString x.0) ,x.1]) binSeq) in
     let lhs = nvar_ (mapFromSeqName names) in
     -- cmpSID = subi
     let rhs = (uconst_ (CSubi ())) in
     let bin = appf2_ lhs rhs exprs in
---    let lhs = app_ lhs rhs in
---    let bin = app_ lhs exprs in
     let bindings = [("bindings", bin)] in
-    createConAppExpr names tmRecName bindings typ info
-
-    
+    (args, createConAppExpr names tmRecName bindings typ info)
 end
 
 lang PEvalLiftSeq = PEvalLift
-  sem liftExpr names lib closing =
+  sem liftExpr names args =
   | TmSeq {tms = exprs, ty = typ, info = info} ->
-    let exprs = map (liftExpr names lib closing) exprs in
-    let bindings = [("tms", seq_ exprs)] in
-    createConAppExpr names tmSeqName bindings typ info
-
+    match liftExprAccum names args exprs with (args, lExprs) in
+    let bindings = [("tms", seq_ lExprs)] in
+    (args, createConAppExpr names tmSeqName bindings typ info)
 end
 
 lang PEvalLiftConst = PEvalLift + ConstAst
@@ -188,13 +199,13 @@ lang PEvalLiftConst = PEvalLift + ConstAst
   | CSymb {val = v} -> [("val", symb_ v)]
   | t -> []
 
-  sem liftExpr names lib closing =
+  sem liftExpr names args =
   | TmConst {val = const, ty = typ, info = info} & t ->
     let bindings = buildConstBindings const in
     -- Build "Const"
     let const = createConApp names (getBuiltinNameFromConst const) bindings typ in
     let bindings = [("val", const)] in
-    createConAppExpr names tmConstName bindings typ info
+    (args, createConAppExpr names tmConstName bindings typ info)
 
   sem tyConInfo =
   | TyInt {info = info} -> (info, tyIntName)
@@ -207,7 +218,7 @@ end
 
 lang PEvalLiftPEval = PEvalLift + VarAst + PEvalAst
 
-  sem liftExpr names lib closing =
+  sem liftExpr names args =
   | TmPEval {e = expr, info = info} ->
     error "Nested peval"
 end
@@ -221,17 +232,23 @@ lang PEvalLiftLam = PEvalLift + LamAst + MExprKCFA + PEvalLiftVar
         createConApp names listConsName bindings tyunknown_
   | Nil _ -> createConApp names listNilName [] tyunknown_
 
+  sem buildEnv : PEvalNames -> PEvalArgs -> Map Name Type -> LiftResult
+  sem buildEnv names args =
+  | fvs ->
+    let fvs = mapToSeq fvs in -- [(Name, Type])
+    match liftAllViaType names args fvs with (args, liftedEnvItems) in
+    let filteredLifts = filterOption liftedEnvItems in
+    let lenv = liftConsList names (listFromSeq filteredLifts) in
+    (args, lenv)
 
-  sem gg : PEvalNames -> Map Name Expr -> List Expr -> Name -> Type -> List Expr
-  sem gg names lib ls id =
-  | typ ->
-    match liftViaType names lib id typ with Some expr then
-    listCons (utuple_ [liftName names id, expr]) ls
-    else ls
-
-  sem buildEnv : PEvalNames -> Map Name Expr -> Map Name Type -> List Expr
-  sem buildEnv names lib =
-  | fvs -> mapFoldWithKey (gg names lib) listEmpty fvs
+  sem liftAllViaType : PEvalNames -> PEvalArgs -> [(Name, Type)] ->
+                      (PEvalArgs, [Option Expr])
+  sem liftAllViaType names args =
+  | ts -> mapAccumL (lam acc. lam t : (Name, Type).
+    match liftViaType names acc t.0 t.1 with Some (acc, expr) then
+      match liftName acc t.0 with (acc, liftedName) in
+        (acc, Some (utuple_ [liftedName, expr]))
+    else (acc, None ())) args ts
 
   sem getTypesOfVars : Set Name -> Map Name Type -> Expr -> Map Name Type
   sem getTypesOfVars freeVars varMapping =
@@ -240,33 +257,33 @@ lang PEvalLiftLam = PEvalLift + LamAst + MExprKCFA + PEvalLiftVar
     else varMapping
   | ast -> sfold_Expr_Expr (getTypesOfVars freeVars) varMapping ast
 
-  sem getLiftedEnv : PEvalNames -> Map Name Expr -> [Name] -> Expr -> Expr
-  sem getLiftedEnv names lib exclude =
+  sem getLiftedEnv : PEvalNames -> PEvalArgs -> [Name] -> Expr -> LiftResult
+  sem getLiftedEnv names args exclude =
   | expr ->
     -- From /mexpr/cfa.mc
     let fvs = freeVars (setEmpty nameCmp) expr in
     let fvs = setSubtract fvs (setOfSeq nameCmp exclude) in
     let typedFvs = getTypesOfVars fvs (mapEmpty nameCmp) expr in
-    let env = buildEnv names lib typedFvs in
-    liftConsList names env
+    buildEnv names args typedFvs
 
-  sem liftExpr names lib closing =
+  sem liftExpr names args =
   | TmLam {ident=id, body = body, ty = typ, info = info} ->
-    if closing then
-      let lBody = liftExpr names lib closing body in
+    if isClosing args then -- TmLam
+      match liftExpr names args body with (args, lExpr) in
+      match liftName args id with (args, lName) in
       let dummyType = liftType names tyunknown_ in
-      let bindings = [("ident", liftName names id), ("body", lBody),
+      let bindings = [("ident", lName), ("body", lExpr),
                       ("tyAnnot", dummyType), ("tyIdent", dummyType)] in
-      createConAppExpr names tmLamName bindings typ info
+      (args, createConAppExpr names tmLamName bindings typ info)
     else -- Create closure
-      let lBody = liftExpr names lib true body in
-      let liftedEnv = getLiftedEnv names lib [id] body in
+      let args = updateClosing args true in
+      match liftExpr names args body with (args, lBody) in
+      match getLiftedEnv names args [id] body with (args, liftedEnv) in
+      match liftName args id with (args, liftedName) in
       let lazyLEnv = lam_ "t" tyunit_ liftedEnv in
-      let bindings = [("ident", liftName names id), ("body", lBody),
+      let bindings = [("ident", liftedName), ("body", lBody),
                       ("env", lazyLEnv)] in
-      -- TmClos lazy evalEnv
-      createConAppInfo names tmClosName bindings typ info
-
+      (args, createConAppInfo names tmClosName bindings typ info)
 end
 
 lang PEvalLiftMExpr =
@@ -300,7 +317,6 @@ use TestLang in
 ---- Dummy AST s.t. constructors and funcs can be included and used in lifting
 let names = _setup in
 --
---let lib : Map Name Expr = (mapEmpty nameCmp) in
 --
 ------------ TmApp -----------------
 --

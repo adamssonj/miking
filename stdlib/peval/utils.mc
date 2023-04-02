@@ -2,11 +2,12 @@ include "peval/include.mc" include "peval/ast.mc"
 include "mexpr/utils.mc"
 include "mexpr/pprint.mc"
 include "mexpr/extract.mc"
+include "mexpr/ast.mc"
 
 include "set.mc"
 
 
-lang PEvalUtils = PEvalAst + PEvalInclude + MExprPrettyPrint + MExprExtract
+lang PEvalUtils = PEvalAst + PEvalInclude + MExprPrettyPrint + MExprExtract + LamAst
   type PEvalNames = {
     pevalNames : [Name],
     consNames : [Name],
@@ -14,6 +15,23 @@ lang PEvalUtils = PEvalAst + PEvalInclude + MExprPrettyPrint + MExprExtract
     tyConsNames : [Name],
     otherFuncs : [Name]
   }
+
+  type PEvalArgs = {
+    lib : Map Name Expr,
+    idMapping : Map Name Name,
+    closing : Bool
+  }
+  sem initArgs : Map Name Expr -> Map Name Name -> PEvalArgs
+  sem initArgs lib = | idm -> {lib=lib, closing=false, idMapping=idm}
+
+  sem updateIds : PEvalArgs -> Map Name Name -> PEvalArgs
+  sem updateIds args = | idm -> {args with idMapping =idm}
+
+  sem updateClosing : PEvalArgs -> Bool -> PEvalArgs
+  sem updateClosing args = | b -> {args with closing = b}
+
+  sem isClosing : PEvalArgs -> Bool
+  sem isClosing = | args -> args.closing
 
   sem findNames : Expr -> [String] -> [Name]
   sem findNames ast = | includes ->
