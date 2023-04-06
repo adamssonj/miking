@@ -7,12 +7,15 @@ include "mexpr/ast-builder.mc"
 include "mexpr/eval.mc"
 include "mexpr/cfa.mc" -- only for freevariables
 
+include "mexpr/mexpr.mc"
+
 include "list.mc"
 include "seq.mc"
 include "set.mc"
 include "string.mc"
 include "stringid.mc"
 include "error.mc"
+include "either.mc"
 
 lang PEvalLift = PEvalAst + PEvalUtils + MExprAst + ClosAst
 
@@ -29,25 +32,25 @@ lang PEvalLift = PEvalAst + PEvalUtils + MExprAst + ClosAst
   | xs -> mapAccumL (lam args. lam e. liftExpr names args e) args xs
 
   sem createConApp : PEvalNames ->  (PEvalNames -> Name)
-                    -> [(String, Expr)] -> Type
+                    -> [(String, Expr)]
                     -> Expr -- TmConApp
-  sem createConApp names getName bindings =
-  | typ -> --let ltype = liftType names typ in
-           let rec = urecord_ bindings in
-           nconapp_ (getName names) rec
+  sem createConApp names getName =
+  | bindings ->
+    let rec = urecord_ bindings in
+    nconapp_ (getName names) rec
 
-  sem createConAppInfo names getName bindings typ =
+  sem createConAppInfo names getName bindings =
   | info -> let bindings = cons ("info", liftInfo names info) bindings in
-            createConApp names getName bindings typ
+            createConApp names getName bindings
 
   sem createConAppExpr names getName bindings typ =
   | info -> let bindings = cons ("ty", liftType names typ) bindings in
-            createConAppInfo names getName bindings typ info
+            createConAppInfo names getName bindings info
 
   sem liftType : PEvalNames -> Type -> Expr
   sem liftType names =
   | t -> match tyConInfo t with (info, getName) in
-    createConAppInfo names getName [] tyunknown_ info
+    createConAppInfo names getName [] info
 
   sem tyConInfo : Type -> (Info, (PEvalNames -> Name))
   sem tyConInfo =
@@ -64,7 +67,7 @@ lang PEvalLift = PEvalAst + PEvalUtils + MExprAst + ClosAst
 
   sem liftInfo : PEvalNames -> Info -> Expr
   sem liftInfo names =
-  | _ -> createConApp names noInfoName [] tyunknown_
+  | _ -> createConApp names noInfoName []
     
 
   sem liftStringToSID : PEvalNames -> String -> Expr
@@ -104,7 +107,7 @@ lang PEvalLiftVar = PEvalLift + VarAst
   | TyInt {info = info} & typ ->
     let lv = TmVar {ident = varName, ty=typ, info = NoInfo (), frozen = false} in
     let bindings = [("val", lv)] in
-    let const = createConApp names (getBuiltinName "int") bindings typ in
+    let const = createConApp names (getBuiltinName "int") bindings in
     let bindings = [("val", const)] in
     Some (createConAppExpr names tmConstName bindings typ info)
   | TySeq {info = info, ty = ty} & typ->
@@ -203,7 +206,7 @@ lang PEvalLiftConst = PEvalLift + ConstAst
   | TmConst {val = const, ty = typ, info = info} & t ->
     let bindings = buildConstBindings const in
     -- Build "Const"
-    let const = createConApp names (getBuiltinNameFromConst const) bindings typ in
+    let const = createConApp names (getBuiltinNameFromConst const) bindings in
     let bindings = [("val", const)] in
     (args, createConAppExpr names tmConstName bindings typ info)
 
@@ -229,26 +232,48 @@ lang PEvalLiftLam = PEvalLift + LamAst + MExprKCFA + PEvalLiftVar
   sem liftConsList : PEvalNames -> List Expr -> Expr
   sem liftConsList names =
   | Cons (a, b) -> let bindings = [("0", a), ("1", liftConsList names b)] in
-        createConApp names listConsName bindings tyunknown_
-  | Nil _ -> createConApp names listNilName [] tyunknown_
+        createConApp names listConsName bindings
+  | Nil _ -> createConApp names listNilName []
 
   sem buildEnv : PEvalNames -> PEvalArgs -> Map Name Type -> LiftResult
   sem buildEnv names args =
   | fvs ->
     let fvs = mapToSeq fvs in -- [(Name, Type])
     match liftAllViaType names args fvs with (args, liftedEnvItems) in
-    let filteredLifts = filterOption liftedEnvItems in
-    let lenv = liftConsList names (listFromSeq filteredLifts) in
+    match eitherPartition liftedEnvItems with (fvs, liftedExprs) in
+    -- For the fvs that we couldn't lift, there's a chance they're reclet binds
+    match handleRecLet names args fvs with (args, liftedEnvItems) in
+    let liftedExprs = concat liftedExprs (filterOption liftedEnvItems) in
+    let lenv = liftConsList names (listFromSeq liftedExprs) in
     (args, lenv)
 
+
+  sem handleRecLet : PEvalNames -> PEvalArgs -> [Name] ->
+                     (PEvalArgs, [Option Expr])
+  sem handleRecLet names args =
+  | ns ->
+    -- [([Name], RecLetBinding)]
+    let binds = filterOption (map (lam name. mapLookup name args.rlMapping) ns) in
+    let ns = join (map (lam bs:([Name], RecLetBinding). bs.0) binds) in
+    let ns = setToSeq (setOfSeq nameCmp ns) in -- [Name] unique
+    mapAccumL (lam acc. lam name.
+        match mapLookup name args.rlMapping with Some t then
+          -- Reclet bindings should have a rhs that is a TmLam
+          -- I.e. liftViaType <=> liftExpr
+          match t with (_, rlb) in
+          match liftExpr names args rlb.body with (acc, liftedExpr) in
+          match liftName acc name with (acc, liftedName) in
+           (acc, Some (utuple_ [liftedName, liftedExpr]))
+        else (acc, None ())) args ns
+
   sem liftAllViaType : PEvalNames -> PEvalArgs -> [(Name, Type)] ->
-                      (PEvalArgs, [Option Expr])
+                      (PEvalArgs, [Either Name Expr])
   sem liftAllViaType names args =
   | ts -> mapAccumL (lam acc. lam t : (Name, Type).
     match liftViaType names acc t.0 t.1 with Some (acc, expr) then
       match liftName acc t.0 with (acc, liftedName) in
-        (acc, Some (utuple_ [liftedName, expr]))
-    else (acc, None ())) args ts
+        (acc, Right (utuple_ [liftedName, expr]))
+    else (acc, Left (t.0))) args ts
 
   sem getTypesOfVars : Set Name -> Map Name Type -> Expr -> Map Name Type
   sem getTypesOfVars freeVars varMapping =
@@ -283,17 +308,50 @@ lang PEvalLiftLam = PEvalLift + LamAst + MExprKCFA + PEvalLiftVar
       let lazyLEnv = lam_ "t" tyunit_ liftedEnv in
       let bindings = [("ident", liftedName), ("body", lBody),
                       ("env", lazyLEnv)] in
-      (args, createConAppInfo names tmClosName bindings typ info)
+      (args, createConAppInfo names tmClosName bindings info)
 end
+
+
+lang PEvalLiftMatch = PEvalLift + MatchAst
+
+  sem liftPatName names args =
+  | PName id -> match liftName args id with (args, lName) in
+    let v = nconapp_ (pNameName names) lName in
+    (args, v)
+  | PWildcard _ -> let v = createConApp names pWildcardName [] in
+    (args, v)
+
+  sem liftPattern names args =
+  | PatInt {val = v, info = info, ty=ty} ->
+    let bindings = [("val", int_ v)] in
+    (args, createConAppExpr names patIntName bindings ty info)
+  | PatNamed {ident=ident, info=info, ty=ty} ->
+    match liftPatName names args ident with (args, lPatName) in
+    let bindings = [("ident", lPatName)] in
+    (args, createConAppExpr names patNamedName bindings ty info)
+
+  sem liftExpr names args =
+  | TmMatch {target=target, pat=pat, thn=thn, els=els, ty=ty, info=info} ->
+    match liftPattern names args pat with (args, lPat) in
+    match liftExprAccum names args [target, thn, els]
+      with (args, [lTarget, lThn, lEls]) in
+    let bindings = [("target", lTarget), ("pat", lPat),
+                    ("thn", lThn), ("els", lEls)] in
+    (args, createConAppExpr names tmMatchName bindings ty info)
+end
+
+
 
 lang PEvalLiftMExpr =
     PEvalLiftApp + PEvalLiftVar + PEvalLiftRecord +
-    PEvalLiftSeq + PEvalLiftConst + PEvalLiftLam + PEvalLiftPEval
+    PEvalLiftSeq + PEvalLiftConst + PEvalLiftLam + PEvalLiftPEval +
+    PEvalLiftMatch
+
 end
 
 
-lang TestLang = PEvalLiftMExpr + MExprPrettyPrint + MExprEval + MExprTypeCheck + MExprSym
-                + MExprEq + MExprEval
+lang TestLang = PEvalLiftMExpr + MExprPrettyPrint + MExprEval + MExprSym
+                + MExprEq
 end
 
 lang SetupLang = PEvalInclude + PEvalUtils end
@@ -316,29 +374,68 @@ use TestLang in
 --
 ---- Dummy AST s.t. constructors and funcs can be included and used in lifting
 let names = _setup in
---
+let args = initArgs () in
+
+
+let _parse =
+  parseMExprString
+    { _defaultBootParserParseMExprStringArg () with allowFree = true }
+in
+
+let _eval = lam x.
+  eval (evalCtxEmpty ()) x in
+
+let _parseEval = lam x:String. 
+  let x = _parse x in 
+  _eval x in
+
 --
 ------------ TmApp -----------------
 --
+let e = addi_ (int_ 1) (int_ 3) in
+
+let k = liftExpr names args e in
+
+--utest _eval e with evalStr st using eqExpr in
+
+--
 ------------ TmVar -----------------
 --
---let expr = var_ "f" in
---let lift = liftExpr names lib expr in
---
+
+let e = var_ "t" in
+let k = liftExpr names args e in
+
+
 --
 ------------ TmRecord -----------------
+let e = urecord_ [("a", int_ 3), ("b", int_ 4)] in
+let k = liftExpr names args e in
 
-let x = nameSym "x" in 
+------------ TmSeq -------------------
 
-let expr = urecord_ [("abc", int_ 3), ("def", int_ 4)] in
-let lift = liftExpr names expr in
+let e = seq_ (map int_ [1,2,3]) in
+let k = liftExpr names args e in
 
-printLn (mexprToString lift);
-
------------- TmSeq -----------------
---
 ------------ TmConst -----------------
+
+let e = int_ 3 in
+let k = liftExpr names args e in
+
 --
 ------------ TmLam -----------------
+----
+
+let e = ulam_ "x" (addi_ (var_ "x") (int_ 3)) in
+let k = liftExpr names args e in
+
 --
+------------ TmMatch -----------------
+--
+
+let e = match_ (int_ 3) (pvar_ "wo") (int_ 5) (int_ 6) in
+let k = liftExpr names args e in
+
+printLn (mexprToString k.1);
+
+
 ()

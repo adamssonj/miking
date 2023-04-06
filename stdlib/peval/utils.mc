@@ -1,4 +1,6 @@
-include "peval/include.mc" include "peval/ast.mc"
+include "peval/include.mc" 
+include "peval/ast.mc"
+
 include "mexpr/utils.mc"
 include "mexpr/pprint.mc"
 include "mexpr/extract.mc"
@@ -7,7 +9,8 @@ include "mexpr/ast.mc"
 include "set.mc"
 
 
-lang PEvalUtils = PEvalAst + PEvalInclude + MExprPrettyPrint + MExprExtract + LamAst
+lang PEvalUtils = PEvalAst + PEvalInclude + MExprPrettyPrint + MExprExtract + LamAst 
+
   type PEvalNames = {
     pevalNames : [Name],
     consNames : [Name],
@@ -18,11 +21,23 @@ lang PEvalUtils = PEvalAst + PEvalInclude + MExprPrettyPrint + MExprExtract + La
 
   type PEvalArgs = {
     lib : Map Name Expr,
+    -- For each binding in the reclet, store the name of the other bindings
+    -- and the binding itself
+    rlMapping: Map Name ([Name], RecLetBinding),
     idMapping : Map Name Name,
     closing : Bool
   }
-  sem initArgs : Map Name Expr -> Map Name Name -> PEvalArgs
-  sem initArgs lib = | idm -> {lib=lib, closing=false, idMapping=idm}
+  sem initArgs : () -> PEvalArgs
+  sem initArgs = | _ -> {lib = (mapEmpty nameCmp), 
+                   rlMapping = (mapEmpty nameCmp),
+                   closing=false, idMapping= (mapEmpty nameCmp)}
+
+  sem updateLib : PEvalArgs -> Map Name Expr -> PEvalArgs
+  sem updateLib args = | lib -> {args with lib = lib}
+
+  sem updateRlMapping : PEvalArgs -> Map Name ([Name], RecLetBinding)
+                        -> PEvalArgs
+  sem updateRlMapping args = | lib -> {args with rlMapping = lib}
 
   sem updateIds : PEvalArgs -> Map Name Name -> PEvalArgs
   sem updateIds args = | idm -> {args with idMapping =idm}
@@ -87,6 +102,10 @@ lang PEvalUtils = PEvalAst + PEvalInclude + MExprPrettyPrint + MExprExtract + La
   sem tmConstName : PEvalNames -> Name
   sem tmConstName = | names -> match getName (names.consNames) "ConstAst_TmConst" with
                              Some t then t else error "TmConst not found"
+
+  sem tmMatchName : PEvalNames -> Name
+  sem tmMatchName = | names -> match getName (names.consNames) "MatchAst_TmMatch" with
+                             Some t then t else error "TmMatch not found"
 
   sem listConsName : PEvalNames -> Name
   sem listConsName = | names -> match getName (names.consNames) "Cons" with
@@ -155,6 +174,22 @@ lang PEvalUtils = PEvalAst + PEvalInclude + MExprPrettyPrint + MExprExtract + La
   sem mexprStringName : PEvalNames -> Name
   sem mexprStringName = | names -> match getName (names.otherFuncs) "toString" 
                           with Some t then t else error "mexprToString not found"
+
+  sem patIntName : PEvalNames -> Name
+  sem patIntName = | names -> match getName (names.consNames) "IntPat_PatInt" 
+                          with Some t then t else error "IntPat not found"
+
+  sem patNamedName : PEvalNames -> Name
+  sem patNamedName = | names -> match getName (names.consNames) "NamedPat_PatNamed"
+                          with Some t then t else error "PatNamed not found"
+
+  sem pNameName: PEvalNames -> Name
+  sem pNameName = | names -> match getName (names.consNames) "PName"
+                          with Some t then t else error "PName not found"
+
+  sem pWildcardName: PEvalNames -> Name
+  sem pWildcardName = | names -> match getName (names.consNames) "PWildcard"
+                          with Some t then t else error "PWildcard not found"
 
   -- Return a string representation of the constant along with whether
   -- it takes an argument when constructed
