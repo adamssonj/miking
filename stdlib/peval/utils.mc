@@ -107,6 +107,10 @@ lang PEvalUtils = PEvalAst + PEvalInclude + MExprPrettyPrint + MExprExtract + La
   sem tmMatchName = | names -> match getName (names.consNames) "MatchAst_TmMatch" with
                              Some t then t else error "TmMatch not found"
 
+  sem tmLetName : PEvalNames -> Name
+  sem tmLetName = | names -> match getName (names.consNames) "LetAst_TmLet" with
+                             Some t then t else error "TmLet not found"
+
   sem listConsName : PEvalNames -> Name
   sem listConsName = | names -> match getName (names.consNames) "Cons" with
                              Some t then t else error "List Cons not found"

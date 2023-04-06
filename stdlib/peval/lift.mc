@@ -341,11 +341,24 @@ lang PEvalLiftMatch = PEvalLift + MatchAst
 end
 
 
+lang PEvalLiftLet = PEvalLift + LetAst
+
+
+  sem liftExpr names args =
+  | TmLet {ident=ident, body=body, inexpr=inexpr, ty=ty, info=info} ->
+    match liftExprAccum names args [body, inexpr] with (args, [lBody, lInex]) in
+    match liftName args ident with (args, lName) in
+    let dummyType = liftType names tyunknown_ in
+    let bindings = [("ident", lName), ("body", lBody), ("inexpr", lInex),
+                  ("tyAnnot", dummyType), ("tyBody", dummyType)] in
+    (args, createConAppExpr names tmLetName bindings ty info)
+
+end
 
 lang PEvalLiftMExpr =
     PEvalLiftApp + PEvalLiftVar + PEvalLiftRecord +
     PEvalLiftSeq + PEvalLiftConst + PEvalLiftLam + PEvalLiftPEval +
-    PEvalLiftMatch
+    PEvalLiftMatch + PEvalLiftLet
 
 end
 
@@ -435,6 +448,12 @@ let k = liftExpr names args e in
 let e = match_ (int_ 3) (pvar_ "wo") (int_ 5) (int_ 6) in
 let k = liftExpr names args e in
 
+--
+------------ TmLet -----------------
+--
+
+let e = bind_ (ulet_ "x" (int_ 3)) (addi_ (int_ 4) (var_ "x")) in
+let k = liftExpr names args e in
 printLn (mexprToString k.1);
 
 
