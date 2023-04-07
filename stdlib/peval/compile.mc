@@ -80,10 +80,16 @@ lang PEvalCompile = PEvalAst + MExprPEval + ClosAst + MExprAst
   | t -> smapAccumL_Expr_Expr (pevalPass pnames args) idMap t
 
 
+  sem hasPEvalTerm : Bool -> Expr -> Bool
+  sem hasPEvalTerm acc =
+  | TmPEval _ -> true
+  | t -> or acc (sfold_Expr_Expr hasPEvalTerm acc t)
+
   sem compilePEval =
   | ast ->
     -- TODO(adamssonj, 2023-03-22): For now just always include, (should check pevalterm exist)
-
+    if not (hasPEvalTerm false ast) then ast
+    else
     match includePEval ast with (ast, pevalNames) in
     match includeConstructors ast with ast in
     -- Find the names of the functions and constructors needed later
@@ -195,9 +201,11 @@ let recursiveThing = preprocess (bindall_ [
     ulet_ "ra" (peval_ (app_ (var_ "odd") (int_ 4)))]) in
 
 let e = match_ (int_ 3) (pvar_ "wo") (int_ 5) (int_ 6) in
+let e = bind_ (ulet_ "x" (int_ 3)) (addi_ (int_ 4) (var_ "x")) in
 let distinctCalls = preprocess (bindall_ [
     ulet_ "k" (peval_ (e))
 ]) in
+
 match compilePEval distinctCalls with ast in
 
 let ast = typeAnnot ast in
