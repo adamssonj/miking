@@ -709,3 +709,28 @@ module ConTag = struct
   let constructor_tag obj =
     if Obj.is_int obj then Obj.obj obj + Obj.custom_tag else Obj.tag obj
 end
+
+let ext_map = Hashtbl.create 1024
+
+module Ext = struct
+  let add_external id e =
+    let id = Mseq.Helpers.to_utf8 id in
+    Hashtbl.add ext_map id (Obj.magic e)
+
+  let get_external id =
+    let id = Mseq.Helpers.to_utf8 id in
+    match Hashtbl.find_opt ext_map id with
+    | Some e -> Obj.magic e
+    | None ->
+        Printf.eprintf "Could not find definition of external %s\n" id;
+        exit 1
+
+  let load_libraries deps dyn_ext_file =
+    let deps = List.map Mseq.Helpers.to_utf8 (Mseq.Helpers.to_list deps) in
+    (match deps with
+    | [] -> ()
+    | _ -> Fl_dynload.load_packages deps);
+    let dyn_ext_file = Mseq.Helpers.to_utf8 dyn_ext_file in
+    Dynlink.loadfile dyn_ext_file
+end
+

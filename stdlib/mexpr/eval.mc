@@ -15,6 +15,7 @@ include "symbolize.mc"
 include "eq.mc"
 include "pprint.mc"
 include "const-arity.mc"
+include "jit.mc"
 
 
 -------------
@@ -650,6 +651,28 @@ lang ConTagEval = ConTagAst + DataAst + IntAst + IntTypeAst + ConTagArity
       TmConst {
         val = CInt {val = 0}, ty = TyInt {info = NoInfo ()}, info = NoInfo ()
       }
+lang ExtSupportEval = ExtSupportAst + UnknownTypeAst + SeqAst
+  syn Const =
+  | CLoadLibraries2 ()
+
+  sem delta info arg =
+  | CAddExternal _ -> errorSingle [info] "Not supported in interpreter"
+  | CGetExternal _ ->
+    match arg with TmSeq {tms = tms} then
+      let id = _evalSeqOfCharsToString info tms in
+      getExternal id
+    else errorSingle [info] "Not getExternal of string"
+  | CLoadLibraries _ ->
+    match arg with TmSeq {tms = []} then
+      TmConst {val = CLoadLibraries2 (), ty = TyUnknown {info = info}, info = info}
+    else errorSingle [info] "External library loading not supported in interpreter"
+  | CLoadLibraries2 _ ->
+    match arg with TmSeq {tms = tms} then
+      let id = _evalSeqOfCharsToString info tms in
+      loadLibraries [] id;
+      uunit_
+    else errorSingle [info] "Not loadLibraries of string"
+end
 end
 
 lang TensorOpEval =
@@ -1204,7 +1227,7 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
   IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
-  ConTagEval + TensorOpEval + BootParserEval + UnsafeCoerceEval
+  ConTagEval + TensorOpEval + BootParserEval + UnsafeCoerceEval + ExtSupportEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +

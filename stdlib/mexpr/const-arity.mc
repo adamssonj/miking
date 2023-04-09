@@ -191,7 +191,14 @@ lang RefOpArity = ConstArity + RefOpAst
   | CDeRef _ -> 1
 end
 
-lang TensorOpArity = ConstArity + TensorOpAst
+lang ExtSupportArity = ExtSupportAst
+  sem constArity =
+  | CAddExternal _ -> 2
+  | CGetExternal _ -> 1
+  | CLoadLibraries _ -> 2
+end
+
+lang TensorOpArity = TensorOpAst
   sem constArity =
   | CTensorCreateUninitInt _ -> 1
   | CTensorCreateUninitFloat _ -> 1
@@ -237,7 +244,7 @@ lang MExprArity =
   FloatStringConversionArity + SymbArity + CmpSymbArity + SeqOpArity +
   FileOpArity + IOArity + RandomNumberGeneratorArity + SysArity + TimeArity +
   ConTagArity + RefOpArity + TensorOpArity + BootParserArity +
-  UnsafeCoerceArity
+  UnsafeCoerceArity + ExtSupportArity
 end
 
 mexpr

@@ -429,3 +429,12 @@ end
 module ConTag : sig
   val constructor_tag : Obj.t -> int
 end
+
+module Ext : sig
+  val add_external : int Mseq.t -> 'a -> unit
+
+  val get_external : int Mseq.t -> 'a
+
+  val load_libraries : int Mseq.t Mseq.t -> int Mseq.t -> unit
+end
+
