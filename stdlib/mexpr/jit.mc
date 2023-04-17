@@ -8,47 +8,37 @@ type LibCompileResult = {
   libPath : String
 }
 
-let compileOcamlLibrary : String -> [String] -> [String] -> String -> LibCompileResult =
+let compileOcamlLibrary : String -> [String] -> [String] -> String -> String =
   lam id. lam libs. lam clibs. lam ocamlProg.
-  let distinctStr = distinct eqString in
-  let libStr = strJoin " " (distinctStr (cons "boot" libs)) in
-  let flagStr =
-    let base = ":standard -w -a " in
-    let clibIncludes = map (concat "-cclib -l") (distinctStr clibs) in
-    concat base (strJoin " " clibIncludes)
-  in
-  let dunefile = strJoin "\n" [
-    join ["(env (dev (flags (", flagStr, ")) (ocamlc_flags (-without-runtime))))"],
-    join ["(library (name ", id, ") (libraries ", libStr, "))"]
-  ] in
+
+  printLn ocamlProg;
   let td = sysTempDirMake () in
   let dir = sysTempDirName td in
   let tempfile = lam f. sysJoinPath dir f in
+  let t = tempfile (concat id ".ml") in
+  writeFile t ocamlProg;
 
-  writeFile (tempfile (concat id ".ml")) ocamlProg;
-  writeFile (tempfile "dune-project") "(lang dune 2.0)";
-  writeFile (tempfile "dune") dunefile;
-
-  let command = ["dune", "build"] in
+  let command = ["ocamlfind", "ocamlopt -package boot -shared -o plugin.cmxs", t] in
   let r = sysRunCommand command "" dir in
   (if neqi r.returncode 0 then
-    sysTempDirDelete td;
+    printLn "Something went wrong when compiling plugin";
+    printLn r.stdout;
+    printLn r.stderr;
     exit 1
-  else ());
-
-  { cleanup = lam. sysTempDirDelete td (); ()
-  , libPath = tempfile (join ["_build/default/", id, ".cmxs"]) }
+  else ()); 
+  tempfile (concat id ".cmxs") 
 
 -- Performs an OCaml compilation which returns the path to the '.cmxs' file,
 -- such that we can dynamically link the compiled code.
 let jitCompile : all a. String -> Expr -> a = lam extId. lam e.
+  printLn "want to compile";
   let p =
     use MCoreCompileLang in
-    compileMCore e (mkEmptyHooks (compileOcamlLibrary extId))
+    compileMCorePlugin e (mkEmptyHooks (compileOcamlLibrary extId))
   in
-  loadLibraries [] p.libPath;
-  p.cleanup ();
-  unsafeCoerce (getExternal extId)
+  printLn "Hello";
+  loadLibraries p;
+  unsafeCoerce (getExternal ())
 
 let _jitCompiled = ref (mapEmpty nameCmp)
 

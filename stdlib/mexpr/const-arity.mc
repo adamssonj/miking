@@ -195,7 +195,7 @@ lang ExtSupportArity = ExtSupportAst
   sem constArity =
   | CAddExternal _ -> 2
   | CGetExternal _ -> 1
-  | CLoadLibraries _ -> 2
+  | CLoadLibraries _ -> 1
 end
 
 lang TensorOpArity = TensorOpAst

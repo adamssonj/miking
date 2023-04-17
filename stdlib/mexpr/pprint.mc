@@ -1223,7 +1223,7 @@ lang MExprPrettyPrint =
   SeqOpPrettyPrint + FileOpPrettyPrint + IOPrettyPrint +
   RandomNumberGeneratorPrettyPrint + SysPrettyPrint + TimePrettyPrint +
   ConTagPrettyPrint + RefOpPrettyPrint + TensorOpPrettyPrint +
-  BootParserPrettyPrint + UnsafeCoercePrettyPrint + ExtSupportPrettyPrint
+  BootParserPrettyPrint + UnsafeCoercePrettyPrint + ExtSupportPrettyPrint +
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +

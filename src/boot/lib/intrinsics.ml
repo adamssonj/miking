@@ -717,19 +717,20 @@ module Ext = struct
     let id = Mseq.Helpers.to_utf8 id in
     Hashtbl.add ext_map id (Obj.magic e)
 
-  let get_external id =
-    let id = Mseq.Helpers.to_utf8 id in
+  (* Should fetch the residual through the interface *)
+  let get_external _ =
+    let module M = (val Inter.get_plugin () : Inter.PLUG) in
+    M.residual ()
+    (*
     match Hashtbl.find_opt ext_map id with
     | Some e -> Obj.magic e
     | None ->
         Printf.eprintf "Could not find definition of external %s\n" id;
         exit 1
+    *)
 
-  let load_libraries deps dyn_ext_file =
-    let deps = List.map Mseq.Helpers.to_utf8 (Mseq.Helpers.to_list deps) in
-    (match deps with
-    | [] -> ()
-    | _ -> Fl_dynload.load_packages deps);
+  let load_libraries dyn_ext_file =
+    (* let deps = List.map Mseq.Helpers.to_utf8 (Mseq.Helpers.to_list deps) in *)
     let dyn_ext_file = Mseq.Helpers.to_utf8 dyn_ext_file in
     Dynlink.loadfile dyn_ext_file
 end

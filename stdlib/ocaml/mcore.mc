@@ -100,4 +100,55 @@ lang MCoreCompileLang =
       res
     in
     compileMCore ast (mkEmptyHooks compileOcaml)
+
+
+  sem compileMCorePlugin : all a. Expr -> Hooks a -> a
+  sem compileMCorePlugin ast =
+  | hooks ->
+    let ast = typeAnnot ast in
+    let ast = removeTypeAscription ast in
+
+    -- If option --debug-type-annot, then pretty-print the AST
+    hooks.debugTypeAnnot ast;
+
+    match typeLift ast with (env, ast) in
+    match generateTypeDecls env with (env, typeTops) in
+    let env : GenerateEnv =
+      chooseExternalImpls (externalGetSupportedExternalImpls ()) env ast
+    in
+    let exprTops = generateTops env ast in
+    let exprTops = hooks.postprocessOcamlTops exprTops in
+
+    -- List OCaml packages availible on the system.
+    let syslibs =
+      setOfSeq cmpString
+        (map (lam x : (String, String). x.0) (externalListOcamlPackages ()))
+    in
+
+    -- Collect external library dependencies
+    match collectLibraries env.exts syslibs with (libs, clibs) in
+    let ocamlProg =
+      use OCamlPrettyPrint in
+      pprintOcamlTops (concat typeTops exprTops)
+    in
+    let takeAllButSemis = lam seq. subsequence seq 0 (subi (length seq) 2) in
+    let ocamlProg = takeAllButSemis ocamlProg in
+
+
+    let ocamlProg = join ["
+    open Boot.Inter
+    module M:Boot.Inter.PLUG =
+    struct
+      let residual () = Obj.magic (", ocamlProg, ")
+    end
+    let () = Boot.Inter.register (module M:Boot.Inter.PLUG)"] in
+
+    -- If option --debug-generate, print the AST
+    hooks.debugGenerate ocamlProg;
+
+    -- If option --exit-before, exit the program
+    hooks.exitBefore ();
+
+    -- Compile OCaml AST
+    hooks.compileOcaml libs clibs ocamlProg
 end

@@ -995,10 +995,10 @@ let addExternal_ = use MExprAst in
   lam id. lam v. appf2_ (uconst_ (CAddExternal ())) id v
 
 let getExternal_ = use MExprAst in
-  lam id. app_ (uconst_ (CGetExternal ())) id
+  app_ (uconst_ (CGetExternal ())) unit_
 
 let loadLibraries_ = use MExprAst in
-  lam libs. lam cmxs. appf2_ (uconst_ (CLoadLibraries ())) libs cmxs
+  lam cmxs. app_ (uconst_ (CLoadLibraries ())) cmxs
 
 -- File operations
 let readFile_ = use MExprAst in

@@ -310,9 +310,9 @@ let arity = function
   | CaddExternal _ ->
       2
   | CgetExternal ->
-      1
+      0
   | CloadLibraries _ ->
-      2
+      1
   (* MCore intrinsics: Tensor *)
   | CtensorCreateDense None ->
       2
@@ -990,17 +990,14 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
       fail_constapp fi
   | CaddExternal _, _ ->
       fail_constapp fi
-  | CgetExternal, TmSeq (fi, s) ->
-      let s = tm_seq2int_seq fi s in
-      Intrinsics.Ext.get_external s
   | CgetExternal, _ ->
-      fail_constapp fi
+      Intrinsics.Ext.get_external ()
   | CloadLibraries None, _ ->
       (* TODO: ignore external libraries for now... *)
       TmConst (fi, CloadLibraries (Some []))
   | CloadLibraries (Some _), TmSeq (fi, s) ->
       let s = tm_seq2int_seq fi s in
-      Intrinsics.Ext.load_libraries Mseq.empty s;
+      Intrinsics.Ext.load_libraries s;
       tm_unit
   | CloadLibraries (Some _), _ ->
       fail_constapp fi

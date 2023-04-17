@@ -1558,7 +1558,7 @@ lang MExprAst =
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
   FloatStringConversionAst + TimeAst + ConTagAst + RefOpAst + TensorOpAst +
-  BootParserAst + UnsafeCoerceAst + ExtSupportAst
+  BootParserAst + UnsafeCoerceAst + ExtSupportAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

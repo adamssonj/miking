@@ -433,8 +433,8 @@ end
 module Ext : sig
   val add_external : int Mseq.t -> 'a -> unit
 
-  val get_external : int Mseq.t -> 'a
+  val get_external : unit -> 'a
 
-  val load_libraries : int Mseq.t Mseq.t -> int Mseq.t -> unit
+  val load_libraries : int Mseq.t -> unit
 end
 
