@@ -162,7 +162,7 @@ let includeTyConsNames = ["UnknownTypeAst_TyUnknown","BoolTypeAst_TyBool", "IntT
 "ConTypeAst_TyCon", "VarTypeAst_TyVar","VarSortAst_PolyVar","VarSortAst_MonoVar",
 "VarSortAst_RecordVar","AllTypeAst_TyAll", "AppTypeAst_TyApp","AliasTypeAst_TyAlias"]
 
-let otherFuncs = ["mapFromSeq", "stringToSid", "mapMapWithKey", "toString"]
+let otherFuncs = ["mapFromSeq", "stringToSid", "mapMapWithKey", "toString", "jitCompile"]
 
 lang PEvalInclude = MExprUtestGenerate
 

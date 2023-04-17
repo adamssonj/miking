@@ -70,13 +70,16 @@ lang PEvalCompile = PEvalAst + MExprPEval + ClosAst + MExprAst
     let args = updateIds args idMap in
     match liftExpr pnames args e with (args, pevalArg) in
     match getLiftedEnv pnames args [] e with (args, liftedEnv) in
-    let lhs = nvar_ (pevalName pnames) in
-    -- temporary
-    let f = appf2_ lhs liftedEnv pevalArg in
-    let p = nvar_ (mexprStringName pnames) in
-    let ff = app_ p f in
-    let fff = print_ ff in
-    (args.idMapping, semi_ fff never_)
+
+    let jitCompile = nvar_ (jitName pnames) in
+    let jitCompile = app_ jitCompile (str_ "plugin") in
+    let pevalFunc = nvar_ (pevalName pnames) in
+    let residual = appf2_ pevalFunc liftedEnv pevalArg in
+    let compiledResidual = app_ jitCompile residual in
+--    let p = nvar_ (mexprStringName pnames) in
+--    let ff = app_ p f in
+--    let fff = print_ ff in
+    (args.idMapping, compiledResidual) 
   | t -> smapAccumL_Expr_Expr (pevalPass pnames args) idMap t
 
 
@@ -101,7 +104,7 @@ lang PEvalCompile = PEvalAst + MExprPEval + ClosAst + MExprAst
     let ast = bindall_ [
         symDefs,
         ast] in
-    printLn (mexprToString ast);
+    --printLn (mexprToString ast);
     ast
 end
 

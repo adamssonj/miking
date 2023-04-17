@@ -75,6 +75,10 @@ lang PEvalUtils = PEvalAst + PEvalInclude + MExprPrettyPrint + MExprExtract + La
   sem pevalName = | names -> match getName (names.pevalNames) "pevalWithEnv" with Some t then t
                              else error "semantic function peval not found"
 
+  sem jitName : PEvalNames -> Name
+  sem jitName = | names -> match getName (names.otherFuncs) "jitCompile" with Some t then t
+                             else error "JIT compile not found"
+
   sem tmClosName : PEvalNames -> Name
   sem tmClosName = | names -> match getName (names.consNames) "ClosAst_TmClos"
                               with Some t then t else error "TmClos not found"

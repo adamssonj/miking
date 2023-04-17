@@ -1,4 +1,5 @@
 include "peval/peval.mc"
+include "mexpr/jit.mc"
 
 
 -- Let bind the semantic 'peval' function such that we can include it 
@@ -8,4 +9,4 @@ let pevalWithEnv = lam env. lam ast.
 
 mexpr
 
-(pevalWithEnv)
+(pevalWithEnv, jitCompile)
