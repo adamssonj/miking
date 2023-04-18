@@ -57,7 +57,8 @@ lang MCoreCompileLang =
     let env : GenerateEnv =
       chooseExternalImpls (externalGetSupportedExternalImpls ()) env ast
     in
-    let exprTops = generateTops env ast in
+    match generateTops env ast with (entryPointId, exprTops) in
+
     let exprTops = hooks.postprocessOcamlTops exprTops in
 
     -- List OCaml packages availible on the system.
@@ -72,7 +73,6 @@ lang MCoreCompileLang =
       use OCamlPrettyPrint in
       pprintOcamlTops (concat typeTops exprTops)
     in
-
     -- If option --debug-generate, print the AST
     hooks.debugGenerate ocamlProg;
 
@@ -116,7 +116,7 @@ lang MCoreCompileLang =
     let env : GenerateEnv =
       chooseExternalImpls (externalGetSupportedExternalImpls ()) env ast
     in
-    let exprTops = generateTops env ast in
+    match generateTops env ast with (entryPointId, exprTops) in
     let exprTops = hooks.postprocessOcamlTops exprTops in
 
     -- List OCaml packages availible on the system.
@@ -131,9 +131,9 @@ lang MCoreCompileLang =
       use OCamlPrettyPrint in
       pprintOcamlTops (concat typeTops exprTops)
     in
+
     let takeAllButSemis = lam seq. subsequence seq 0 (subi (length seq) 2) in
     let ocamlProg = takeAllButSemis ocamlProg in
-
 
     let ocamlProg = join ["
     open Boot.Inter
