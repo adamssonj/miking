@@ -8,17 +8,20 @@ type LibCompileResult = {
   libPath : String
 }
 
-let compileOcamlLibrary : String -> [String] -> [String] -> String -> String =
-  lam id. lam libs. lam clibs. lam ocamlProg.
+let compileOcamlLibrary : [String] -> [String] -> String -> LibCompileResult =
+  lam libs. lam clibs. lam ocamlProg.
 
   printLn ocamlProg;
   let td = sysTempDirMake () in
   let dir = sysTempDirName td in
   let tempfile = lam f. sysJoinPath dir f in
-  let t = tempfile (concat id ".ml") in
+  let t = tempfile ("plugin.ml") in
   writeFile t ocamlProg;
+  -- Assume that needed dependencies are present in the cwd
+  let includePath = sysGetCwd () in
 
-  let command = ["ocamlfind", "ocamlopt -package boot -shared -o plugin.cmxs", t] in
+  let command = ["ocamlfind", "ocamlopt -package boot -shared -I ", includePath,
+                 " -o plugin.cmxs ", t] in
   let r = sysRunCommand command "" dir in
   (if neqi r.returncode 0 then
     printLn "Something went wrong when compiling plugin";
@@ -26,19 +29,26 @@ let compileOcamlLibrary : String -> [String] -> [String] -> String -> String =
     printLn r.stderr;
     exit 1
   else ()); 
-  tempfile (concat id ".cmxs") 
+--  let destpath = sysJoinPath includePath "plugin.cmxs" in
+  --sysMoveFile (tempfile ("plugin.cmxs")) (destpath);
+  {
+  libPath = tempfile ("plugin.cmxs"),
+  cleanup = lam. sysTempDirDelete td (); ()
+  }
 
 -- Performs an OCaml compilation which returns the path to the '.cmxs' file,
 -- such that we can dynamically link the compiled code.
-let jitCompile : all a. String -> Expr -> a = lam extId. lam e.
+let jitCompile : all a. Map Name String -> Expr -> a =
+  lam pprintEnv.  lam e.
   printLn "want to compile";
   let p =
     use MCoreCompileLang in
-    compileMCorePlugin e (mkEmptyHooks (compileOcamlLibrary extId))
+    compileMCorePlugin pprintEnv e (mkEmptyHooks (compileOcamlLibrary))
   in
-  printLn "Hello";
-  loadLibraries p;
+  loadLibraries p.libPath;
+  p.cleanup ();
   unsafeCoerce (getExternal ())
+
 
 let _jitCompiled = ref (mapEmpty nameCmp)
 
