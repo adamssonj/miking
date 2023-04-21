@@ -16,7 +16,9 @@ lang PEvalUtils = PEvalAst + PEvalInclude + MExprPrettyPrint + MExprExtract + La
     consNames : [Name],
     builtinsNames : [Name],
     tyConsNames : [Name],
-    otherFuncs : [Name]
+    otherFuncs : [Name],
+    nameMapPH : Name -- Holds the reference to the placeholder where a nameMap will
+                     -- be inserted. Used later on to create a pprintEnv
   }
 
   type PEvalArgs = {
@@ -54,18 +56,22 @@ lang PEvalUtils = PEvalAst + PEvalInclude + MExprPrettyPrint + MExprExtract + La
   if eqi (length includes) (length names) then
       names
   else 
+    let incs = setOfSeq cmpString includes in
+    let nms = setOfSeq cmpString (map (lam x. x.0) names) in
+    let diff = setSubtract incs nms in
+    (map (lam str. printLn str; str) (setToSeq diff));
     error "A necessary include could not be found in the AST"
 
-  sem createNames : Expr -> [Name] -> PEvalNames
-  sem createNames ast =
-  | pevalNames ->
+  sem createNames : Expr -> [Name] -> Name -> PEvalNames
+  sem createNames ast pevalNames =
+  | nameMapName ->
   let consNames = findNames ast includeConsNames in
   let builtinsNames = findNames ast includeBuiltins in
   let tyConsNames = findNames ast includeTyConsNames in
   let otherFuncs = findNames ast otherFuncs in
   {pevalNames = pevalNames, consNames = consNames,
    builtinsNames = builtinsNames, tyConsNames = tyConsNames,
-   otherFuncs=otherFuncs}
+   otherFuncs=otherFuncs, nameMapPH = nameMapName}
 
   sem getName : [Name] -> String -> Option Name
   sem getName names =
@@ -78,6 +84,10 @@ lang PEvalUtils = PEvalAst + PEvalInclude + MExprPrettyPrint + MExprExtract + La
   sem jitName : PEvalNames -> Name
   sem jitName = | names -> match getName (names.otherFuncs) "jitCompile" with Some t then t
                              else error "JIT compile not found"
+
+  sem nameCmpName : PEvalNames -> Name
+  sem nameCmpName = | names -> match getName (names.otherFuncs) "nameCmp" with Some t then t
+                             else error "nameCmp not found"
 
   sem tmClosName : PEvalNames -> Name
   sem tmClosName = | names -> match getName (names.consNames) "ClosAst_TmClos"
@@ -191,13 +201,16 @@ lang PEvalUtils = PEvalAst + PEvalInclude + MExprPrettyPrint + MExprExtract + La
   sem patNamedName = | names -> match getName (names.consNames) "NamedPat_PatNamed"
                           with Some t then t else error "PatNamed not found"
 
-  sem pNameName: PEvalNames -> Name
+  sem pNameName : PEvalNames -> Name
   sem pNameName = | names -> match getName (names.consNames) "PName"
                           with Some t then t else error "PName not found"
 
-  sem pWildcardName: PEvalNames -> Name
+  sem pWildcardName : PEvalNames -> Name
   sem pWildcardName = | names -> match getName (names.consNames) "PWildcard"
                           with Some t then t else error "PWildcard not found"
+
+  sem nameMapName : PEvalNames -> Name
+  sem nameMapName = | names -> names.nameMapPH
 
   -- Return a string representation of the constant along with whether
   -- it takes an argument when constructed

@@ -70,33 +70,63 @@ lang PEvalCompile = PEvalAst + MExprPEval + ClosAst + MExprAst
     let args = updateIds args idMap in
     match liftExpr pnames args e with (args, pevalArg) in
     match getLiftedEnv pnames args [] e with (args, liftedEnv) in
-
     let jitCompile = nvar_ (jitName pnames) in
-    let jitCompile = app_ jitCompile (str_ "plugin") in
+    let placeHolderPprint = nvar_ (nameMapName pnames) in
+    let jitCompile = app_ jitCompile placeHolderPprint in
     let pevalFunc = nvar_ (pevalName pnames) in
     let residual = appf2_ pevalFunc liftedEnv pevalArg in
     let compiledResidual = app_ jitCompile residual in
---    let p = nvar_ (mexprStringName pnames) in
---    let ff = app_ p f in
---    let fff = print_ ff in
     (args.idMapping, compiledResidual) 
   | t -> smapAccumL_Expr_Expr (pevalPass pnames args) idMap t
-
 
   sem hasPEvalTerm : Bool -> Expr -> Bool
   sem hasPEvalTerm acc =
   | TmPEval _ -> true
   | t -> or acc (sfold_Expr_Expr hasPEvalTerm acc t)
 
+  sem updatePprintPH : PEvalNames -> Map Name Name -> Map Name String ->
+                       Expr -> (Map Name String, Expr)
+  sem updatePprintPH names idMap nameMap =
+  | TmLet t ->
+    if nameEq t.ident (nameMapName names) then
+      -- IdMap : ActualName -> GeneratedName
+      --       : NameInProgram.ml -> NameInPlugin.ml
+      -- ActualName and GeneratedName should be pprinted to same string
+      -- Here, we create the strings for those names explicitly
+      let stringName = lam acName.
+       join ["peval_", nameGetStr acName
+       , "\'"
+       , (int2string (sym2hash (optionGetOrElse
+                                 (lam. error "Expected symbol")
+                                 (nameGetSym acName))))] in
+
+      -- Create Expr of nameMap (used in plugins)
+      let kvSeq = mapFoldWithKey (lam l. lam acName. lam genName.
+         let name = utuple_ [str_ acName.0, nvar_ genName] in
+         snoc l (utuple_ [name, str_ (stringName acName)])) [] idMap in
+      let mfs = nvar_ (mapFromSeqName names) in
+      let ncmp = nvar_ (nameCmpName names) in
+      let nameMapExpr = appf2_ mfs ncmp (seq_ kvSeq) in
+
+      -- Create actual nameMap (used in actual program)
+      let nameMap = mapFoldWithKey (lam m. lam acName. lam genName.
+        mapInsert acName (stringName acName) m) (mapEmpty nameCmp) idMap in
+
+      (nameMap, TmLet {t with body=nameMapExpr})
+    else
+      smapAccumL_Expr_Expr (updatePprintPH names idMap) nameMap (TmLet t)
+  | t ->
+      smapAccumL_Expr_Expr (updatePprintPH names idMap) nameMap t
+
   sem compilePEval =
   | ast ->
     -- TODO(adamssonj, 2023-03-22): For now just always include, (should check pevalterm exist)
-    if not (hasPEvalTerm false ast) then ast
+    if not (hasPEvalTerm false ast) then (false, (mapEmpty nameCmp), ast)
     else
     match includePEval ast with (ast, pevalNames) in
-    match includeConstructors ast with ast in
+    match includeConstructors ast with (ast, nameMapName) in
     -- Find the names of the functions and constructors needed later
-    let names = createNames ast pevalNames in
+    let names = createNames ast pevalNames nameMapName in
     match pevalPass names (initArgs ()) (mapEmpty nameCmp) ast
       with (idMapping, ast) in
     let symDefs = bindall_ (map (lam n:Name. nulet_ n (gensym_ uunit_))
@@ -104,8 +134,10 @@ lang PEvalCompile = PEvalAst + MExprPEval + ClosAst + MExprAst
     let ast = bindall_ [
         symDefs,
         ast] in
+    match updatePprintPH names idMapping (mapEmpty nameCmp) ast
+      with (nameMap, ast) in
     --printLn (mexprToString ast);
-    ast
+    (true, nameMap, ast)
 end
 
 
@@ -209,7 +241,7 @@ let distinctCalls = preprocess (bindall_ [
     ulet_ "k" (peval_ (e))
 ]) in
 
-match compilePEval distinctCalls with ast in
+match compilePEval distinctCalls with (_, _, ast) in
 
 let ast = typeAnnot ast in
 

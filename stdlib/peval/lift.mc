@@ -373,9 +373,9 @@ let _setup =
   use SetupLang in
   let ast = ulet_ "t" (int_ 3) in
   match includePEval ast with (ast, pevalNames) in
-  match includeConstructors ast with ast in
+  match includeConstructors ast with (ast, nameMapName) in
   -- Find the names of the functions and constructors needed later
-  let names = createNames ast pevalNames in
+  let names = createNames ast pevalNames nameMapName in
   names
 
 mexpr

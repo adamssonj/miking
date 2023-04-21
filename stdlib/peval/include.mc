@@ -162,7 +162,8 @@ let includeTyConsNames = ["UnknownTypeAst_TyUnknown","BoolTypeAst_TyBool", "IntT
 "ConTypeAst_TyCon", "VarTypeAst_TyVar","VarSortAst_PolyVar","VarSortAst_MonoVar",
 "VarSortAst_RecordVar","AllTypeAst_TyAll", "AppTypeAst_TyApp","AliasTypeAst_TyAlias"]
 
-let otherFuncs = ["mapFromSeq", "stringToSid", "mapMapWithKey", "toString", "jitCompile"]
+let otherFuncs = ["mapFromSeq", "stringToSid", "mapMapWithKey", "toString", "jitCompile",
+                  "nameCmp"]
 
 lang PEvalInclude = MExprUtestGenerate
 
@@ -174,9 +175,12 @@ lang PEvalInclude = MExprUtestGenerate
            resetStore (); -- clear stored references as to not interfere with utest-gen later
            (eliminateDuplicateCode ast, names)
 
-  sem includeConstructors : Expr -> Expr
+  sem includeConstructors : Expr -> (Expr, Name)
   sem includeConstructors =
-  | ast -> let ast = mergeWithUtestHeaderH (utestEnvEmpty ()) ast (loadRuntime consLoc) in
+  | ast -> let nameMapName = nameSym "nameMapPlaceHolder" in
+           let placeholder = nulet_ nameMapName unit_ in
+           let ast = bind_ placeholder ast in
+           let ast = mergeWithUtestHeaderH (utestEnvEmpty ()) ast (loadRuntime consLoc) in
            resetStore ();
-           eliminateDuplicateCode ast
+           (eliminateDuplicateCode ast, nameMapName)
 end

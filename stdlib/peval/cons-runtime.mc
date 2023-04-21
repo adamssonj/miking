@@ -3,6 +3,7 @@ include "mexpr/eval.mc" -- tmClos
 include "mexpr/info.mc"
 include "map.mc"
 include "mexpr/pprint.mc"
+include "name.mc"
 
 let tmApp = use AppAst in
     lam x. TmApp x
@@ -34,4 +35,4 @@ let toString = use MExprPrettyPrint in
 mexpr
 
 (tmApp, tmLam, tmVar, tmRec, tmSeq, tmClos, tmConst, mapFromSeq, mapMapWithKey,
- toString)
+ toString, nameCmp)
