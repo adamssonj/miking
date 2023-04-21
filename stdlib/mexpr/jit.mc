@@ -11,7 +11,6 @@ type LibCompileResult = {
 let compileOcamlLibrary : [String] -> [String] -> String -> LibCompileResult =
   lam libs. lam clibs. lam ocamlProg.
 
-  printLn ocamlProg;
   let td = sysTempDirMake () in
   let dir = sysTempDirName td in
   let tempfile = lam f. sysJoinPath dir f in
@@ -40,7 +39,6 @@ let compileOcamlLibrary : [String] -> [String] -> String -> LibCompileResult =
 -- such that we can dynamically link the compiled code.
 let jitCompile : all a. Map Name String -> Expr -> a =
   lam pprintEnv.  lam e.
-  printLn "want to compile";
   let p =
     use MCoreCompileLang in
     compileMCorePlugin pprintEnv e (mkEmptyHooks (compileOcamlLibrary))
@@ -48,7 +46,6 @@ let jitCompile : all a. Map Name String -> Expr -> a =
   loadLibraries p.libPath;
   p.cleanup ();
   unsafeCoerce (getExternal ())
-
 
 let _jitCompiled = ref (mapEmpty nameCmp)
 
