@@ -35,19 +35,29 @@ let compileOcamlLibrary : [String] -> [String] -> String -> LibCompileResult =
   cleanup = lam. sysTempDirDelete td (); ()
   }
 
--- Performs an OCaml compilation which returns the path to the '.cmxs' file,
--- such that we can dynamically link the compiled code.
-let jitCompile : all a. Map Name String -> Expr -> a =
-  lam pprintEnv.  lam e.
+let _jitCompiled = ref (mapEmpty nameCmp)
+
+let jitCompile : all a. Name -> Map Name String -> Expr -> a =
+  lam id. lam pprintEnv.  lam e.
+  match mapLookup id (deref _jitCompiled) with Some f then f
+  else
+    let nameToStr = lam id.
+      let s = nameGetStr id in
+      match nameGetSym id with Some sym then
+        join [s, "_", int2string (sym2hash sym)]
+      else s
+    in
+  let extId = concat "mexpr_jit_" (nameToStr id) in
   let p =
     use MCoreCompileLang in
-    compileMCorePlugin pprintEnv e (mkEmptyHooks (compileOcamlLibrary))
+    compileMCorePlugin extId pprintEnv e (mkEmptyHooks (compileOcamlLibrary))
   in
   loadLibraries p.libPath;
   p.cleanup ();
-  unsafeCoerce (getExternal ())
+  let residual = unsafeCoerce (getExternal extId) in
+  modref _jitCompiled (mapInsert id residual (deref _jitCompiled));
+  residual
 
-let _jitCompiled = ref (mapEmpty nameCmp)
 
 let _compileExpr : all a. Name -> Expr -> a = lam id. lam e.
   match mapLookup id (deref _jitCompiled) with Some f then f

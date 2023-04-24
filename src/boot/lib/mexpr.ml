@@ -990,8 +990,11 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
       fail_constapp fi
   | CaddExternal _, _ ->
       fail_constapp fi
+  | CgetExternal, TmSeq (fi, s) ->
+      let s = tm_seq2int_seq fi s in
+      Intrinsics.Ext.get_external s
   | CgetExternal, _ ->
-      Intrinsics.Ext.get_external ()
+      fail_constapp fi
   | CloadLibraries None, _ ->
       (* TODO: ignore external libraries for now... *)
       TmConst (fi, CloadLibraries (Some []))

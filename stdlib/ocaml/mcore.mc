@@ -124,8 +124,8 @@ lang MCoreCompileLang =
     compileMCore ast (mkEmptyHooks compileOcaml)
 
 
-  sem compileMCorePlugin : all a. Map Name String -> Expr -> Hooks a -> a
-  sem compileMCorePlugin nameMap ast =
+  sem compileMCorePlugin : all a. String -> Map Name String -> Expr -> Hooks a -> a
+  sem compileMCorePlugin pluginId nameMap ast =
   | hooks ->
     let ast = typeAnnot ast in
     let ast = removeTypeAscription ast in
@@ -171,7 +171,7 @@ lang MCoreCompileLang =
     "
     let residual () = Obj.magic (", entryPointName, " ())
     end
-    let () = Boot.Inter.register (module M:Boot.Inter.PLUG)"] in
+    let () = Boot.Inter.register \"", pluginId, "\" (module M:Boot.Inter.PLUG)"] in
 
     -- If option --debug-generate, print the AST
     hooks.debugGenerate ocamlProg;

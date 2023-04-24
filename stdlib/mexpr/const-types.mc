@@ -204,7 +204,7 @@ end
 lang ExtSupportTypeAst = ExtSupportAst
   sem tyConst =
   | CAddExternal _ -> tyall_ "a" (tyarrows_ [tystr_, tyvar_ "a", tyunit_])
-  | CGetExternal _ -> tyall_ "a" (tyvar_ "a")
+  | CGetExternal _ -> tyall_ "a" (tyarrow_ tystr_ (tyvar_ "a"))
   | CLoadLibraries _ -> tyarrow_ tystr_ tyunit_
 end
 

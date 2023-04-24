@@ -70,9 +70,10 @@ lang PEvalCompile = PEvalAst + MExprPEval + ClosAst + MExprAst
     let args = updateIds args idMap in
     match liftExpr pnames args e with (args, pevalArg) in
     match getLiftedEnv pnames args [] e with (args, liftedEnv) in
+    match liftName args (nameSym "jitId") with (args, id) in
     let jitCompile = nvar_ (jitName pnames) in
     let placeHolderPprint = nvar_ (nameMapName pnames) in
-    let jitCompile = app_ jitCompile placeHolderPprint in
+    let jitCompile = appf2_ jitCompile id placeHolderPprint in
     let pevalFunc = nvar_ (pevalName pnames) in
     let residual = appf2_ pevalFunc liftedEnv pevalArg in
     let compiledResidual = app_ jitCompile residual in
