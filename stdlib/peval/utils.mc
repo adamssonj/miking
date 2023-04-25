@@ -52,11 +52,11 @@ lang PEvalUtils = PEvalAst + PEvalInclude + MExprPrettyPrint + MExprExtract + La
   sem _nameSeqToMap = | names ->
   mapFromSeq cmpString (map (lam name. (name.0, name)) names)
 
-  sem findNames : Expr -> [String] -> Map String Name 
+  sem findNames : Expr -> [String] -> Map String Name
   sem findNames ast = | includes ->
   let names = filterOption (findNamesOfStrings includes ast) in
   if eqi (length includes) (length names) then
-    _nameSeqToMap names 
+    _nameSeqToMap names
   else 
     error "A necessary include could not be found in the AST"
 
@@ -68,16 +68,16 @@ lang PEvalUtils = PEvalAst + PEvalInclude + MExprPrettyPrint + MExprExtract + La
   let builtinsNames = findNames ast includeBuiltins in
   let tyConsNames = findNames ast includeTyConsNames in
   let otherFuncs = findNames ast otherFuncs in
-  {pevalNames = pevalNames, 
+  {pevalNames = pevalNames,
    consNames = consNames,
-   builtinsNames = builtinsNames, 
+   builtinsNames = builtinsNames,
    tyConsNames = tyConsNames,
    otherFuncs=otherFuncs}
 
   sem getName : Map String Name -> String -> Name
   sem getName names =
   | str -> match mapLookup str names with Some n then n
-           else error (concat "Could not find: " str) 
+           else error (concat "Could not find: " str)
 
   sem pevalName : PEvalNames -> Name
   sem pevalName = | names -> getName (names.pevalNames) "pevalWithEnv"
@@ -158,10 +158,10 @@ lang PEvalUtils = PEvalAst + PEvalInclude + MExprPrettyPrint + MExprExtract + La
   sem stringToSidName = | names -> getName (names.otherFuncs) "stringToSid"
 
   sem mexprStringName : PEvalNames -> Name
-  sem mexprStringName = | names -> getName (names.otherFuncs) "toString" 
+  sem mexprStringName = | names -> getName (names.otherFuncs) "toString"
 
   sem patIntName : PEvalNames -> Name
-  sem patIntName = | names -> getName (names.consNames) "IntPat_PatInt" 
+  sem patIntName = | names -> getName (names.consNames) "IntPat_PatInt"
 
   sem patNamedName : PEvalNames -> Name
   sem patNamedName = | names -> getName (names.consNames) "NamedPat_PatNamed"
