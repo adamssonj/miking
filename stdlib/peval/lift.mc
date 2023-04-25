@@ -55,8 +55,9 @@ lang PEvalLift = PEvalAst + PEvalUtils + MExprAst + ClosAst
 
   sem tyConInfo : Type -> (Info, (PEvalNames -> Name))
   sem tyConInfo =
-  | TyUnknown {info = info} -> (info, tyUnknownName) 
-  | t -> printLn "Don't know how to lift this type"; (NoInfo(), tyUnknownName)
+  -- Right now, the partial evaluator is not able to propagate types,
+  -- so we need to type check the AST later anyhow. Hence, use unknown type.
+  | t -> (NoInfo(), tyUnknownName)
 
   sem liftName : PEvalArgs -> Name -> LiftResult
   sem liftName args = | name ->
@@ -70,7 +71,6 @@ lang PEvalLift = PEvalAst + PEvalUtils + MExprAst + ClosAst
   sem liftInfo names =
   | _ -> createConApp names noInfoName []
     
-
   sem liftStringToSID : PEvalNames -> String -> Expr
   sem liftStringToSID names = | x ->
    app_ (nvar_ (stringToSidName names)) (str_ x)
@@ -354,7 +354,6 @@ end
 
 
 lang PEvalLiftLet = PEvalLift + LetAst
-
 
   sem liftExpr names args =
   | TmLet {ident=ident, body=body, inexpr=inexpr, ty=ty, info=info} ->
