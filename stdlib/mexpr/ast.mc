@@ -930,6 +930,14 @@ lang RefOpAst = ConstAst
   | CDeRef {}
 end
 
+lang ExtSupportAst = ConstAst
+  syn Const =
+  | CAddExternal {}
+  | CGetExternal {}
+  | CLoadLibraries {}
+end
+
+
 lang TensorOpAst = ConstAst
   syn Const =
   | CTensorCreateUninitInt {}
@@ -1543,8 +1551,8 @@ lang MExprAst =
   CmpIntAst + IntCharConversionAst + CmpFloatAst + CharAst + CmpCharAst +
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
-  FloatStringConversionAst + TimeAst + ConTagAst + RefOpAst + TensorOpAst +
-  BootParserAst + UnsafeCoerceAst +
+  FloatStringConversionAst + TimeAst + ConTagAst + RefOpAst + ExtSupportAst +
+  TensorOpAst + BootParserAst + UnsafeCoerceAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

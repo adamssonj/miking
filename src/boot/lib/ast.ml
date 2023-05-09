@@ -181,6 +181,10 @@ and const =
   | Cref
   | CmodRef of tm ref option
   | CdeRef
+  (* MCore intrinsics: External support *)
+  | CaddExternal of ustring option
+  | CgetExternal
+  | CloadLibraries
   (* MCore intrinsics: Tensors *)
   | CtensorCreateDense of int Mseq.t option
   | CtensorCreateUninitInt
@@ -632,6 +636,9 @@ let const_has_side_effect = function
       true
   (* MCore intrinsics: References *)
   | Cref | CmodRef _ | CdeRef ->
+      true
+  (* MCore intrinsics: External support *)
+  | CaddExternal _ | CgetExternal | CloadLibraries ->
       true
   (* MCore intrinsics: Tensors *)
   | CtensorCreateDense _
