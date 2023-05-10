@@ -277,7 +277,7 @@ let distinctCalls = preprocess (bindall_ [
     app_ (var_ "p") (int_ 4)
 ]) in
 
-match compileSpecialize unknownTyRecUnknown with ast in
+match compileSpecialize unknownTyRecUnknown with (_, _, ast) in
 
 printLn (mexprToString ast);
 
