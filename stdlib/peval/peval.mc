@@ -57,7 +57,7 @@ lang PEvalCtx = Eval + SideEffect
     env = evalEnvEmpty (),
     freeVar = setEmpty nameCmp,
     effectEnv = sideEffectEnvEmpty (),
-    maxRecDepth = 2
+    maxRecDepth = 4
   }
 end
 
@@ -248,6 +248,7 @@ lang RecLetsPEval = PEval + RecLetsAst + ClosAst + LamAst
       (inexprCtx, inexpr)
     else
       let ctx = { inexprCtx with freeVar = setUnion inexprCtx.freeVar fv } in
+
     match
       mapAccumL
         (lam ctx. lam bind.
@@ -405,7 +406,7 @@ lang ArithIntPEval = ArithIntEval + VarAst
     case 1 then x
     case _ then b.appSeq (b.uconst c) args
     end
-  | (c & (CModi _), args & [TmConst _, TmVar _]) ->
+  | (c & (CModi _), args & ([TmConst _, TmVar _] | [TmVar _, TmConst _])) ->
     let b = astBuilder info in
     b.appSeq (b.uconst c) args
   | (c & (CAddi _ | CMuli _ | CSubi _ | CDivi _ | CModi _),
@@ -486,6 +487,13 @@ lang CmpIntPEval = CmpIntEval + VarAst
     b.appSeq (b.uconst c) args
 end
 
+lang CmpCharPEval = CmpCharEval + VarAst + SeqOpAst
+  sem delta info =
+  | (c & CEqc _, args & ([TmVar _, _] | [_, TmVar _])) ->
+    let b = astBuilder info in
+    b.appSeq (b.uconst c) args
+end
+
 lang IOPEval = IOAst + SeqAst + IOArity
   sem delta info =
   | (c & (CPrint _ | CPrintError _), args & [TmSeq s]) ->
@@ -497,13 +505,42 @@ lang IOPEval = IOAst + SeqAst + IOArity
     b.appSeq (b.uconst c) args
 end
 
+lang SeqOpPEval = SeqOpEval + VarAst + PEval + MExprPrettyPrint
+  sem delta info =
+  | (c & (CLength _ | CReverse _ | CHead _ | CTail _ | CNull _ | CIsList _ |
+          CIsRope _),
+     args & [TmVar _])
+  | (c & (CGet _ | CSet _ | CConcat _ | CSplitAt _),
+     args & ([TmVar _, _] | [_ , TmVar _ ]))
+  | (c & (CCons _),
+     args & [_, TmVar _])
+  | (c & (CSnoc _),
+     args & [TmVar _, _])
+  | (c & (CFoldl _ | CFoldr _ | CSubsequence _),
+     args)
+  | (c & (CMap _ | CMapi _ | CIter _ | CIteri _ | CCreate _ | CCreateList _ |
+          CCreateRope _),
+     args) ->
+    let b = astBuilder info in
+    b.appSeq (b.uconst c) args
+end
+
+lang SysPEval = VarAst + PEval
+  sem delta info =
+  | (c & CError _, args) ->
+    -- Always want to delay errors until the program is actually run
+    let b = astBuilder info in
+    b.appSeq (b.uconst c) args
+end
+
 lang MExprPEval =
   -- Terms
   VarPEval + LamPEval + AppPEval + RecordPEval + ConstPEval + LetPEval +
   RecLetsPEval + MatchPEval + NeverPEval + SeqPEval +
 
   -- Constants
-  ArithIntPEval + ArithFloatPEval + CmpIntPEval + CmpFloatPEval + IOPEval +
+  ArithIntPEval + ArithFloatPEval + CmpIntPEval + CmpFloatPEval + CmpCharPEval +
+  IOPEval + SeqOpPEval + SysPEval +
 
   -- Patterns
   NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
