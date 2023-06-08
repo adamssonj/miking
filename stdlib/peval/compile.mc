@@ -18,7 +18,7 @@ include "mexpr/shallow-patterns.mc"
 
 lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst + SpecializeInclude +
                     SpecializeLiftMExpr + MExprLambdaLift + SpecializeExtract +
-                    MExprLowerNestedPatterns 
+                    MExprLowerNestedPatterns
 
   sem createSpecExpr : Expr -> Expr -> Expr
   sem createSpecExpr deps =
@@ -62,24 +62,28 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst + SpecializeInclu
       match liftExpr pnames args toSpec with (args, pevalArg) in
       match liftName pnames args (nameSym "residualID") with (args, id) in
 
-      let time = lam expr.
+      let time = lam str. lam expr.
         let sym = nameSym "t1" in
         let retSym = nameSym "ret" in
         bindall_ [
           nulet_ sym (wallTimeMs_ uunit_),
           nulet_ retSym expr,
-          ulet_ "" (semi_ (print_ (
-            float2string_ (
-              (subf_ (wallTimeMs_ uunit_) (nvar_ sym)))))
-            (print_ (str_ "\npront\n"))),
+          ulet_ "" (
+            print_ (concat_
+              (str_ (concat str "\n"))
+              (concat_
+                (float2string_ ((subf_ (wallTimeMs_ uunit_) (nvar_ sym))))
+                (str_ "\n")
+              ))
+            ),
           nvar_ retSym] in
 
       let jitCompile = nvar_ (jitName pnames) in
       let placeHolderPprint = nvar_ (nameMapName pnames) in
       let jitCompile = appf2_ jitCompile id placeHolderPprint in
       let pevalFunc = nvar_ (pevalName pnames) in
-      let residual = time (appf2_ pevalFunc pevalEnv pevalArg) in
-      let compiledResidual = time (app_ jitCompile residual) in
+      let residual = time "peval" (appf2_ pevalFunc pevalEnv pevalArg) in
+      let compiledResidual = time "jit" (app_ jitCompile residual) in
       let newBody = updateBody compiledResidual t.body in
       (args.idMapping, TmLet {t with body = newBody})
     else smapAccumL_Expr_Expr (pevalPass pnames args) idMap (TmLet t)
