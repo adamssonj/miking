@@ -18,7 +18,7 @@ include "mexpr/shallow-patterns.mc"
 
 lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst + SpecializeInclude +
                     SpecializeLiftMExpr + MExprLambdaLift + SpecializeExtract +
-                    MExprLowerNestedPatterns
+                    MExprLowerNestedPatterns 
 
   sem createSpecExpr : Expr -> Expr -> Expr
   sem createSpecExpr deps =
@@ -38,15 +38,15 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst + SpecializeInclu
     else smap_Expr_Expr (rmCopy rm) (TmLet t)
   | t -> smap_Expr_Expr (rmCopy rm) t
 
-  sem pevalPass : SpecializeNames -> SpecializeArgs -> Map Name Name ->
+  sem specializePass : SpecializeNames -> SpecializeArgs -> Map Name Name ->
                   Expr -> (Map Name Name, Expr)
-  sem pevalPass pnames args idMap =
+  sem specializePass pnames args idMap =
   | TmLet t ->
     match mapLookup t.ident args.extractMap with Some e then
       -- Remove the copy of this let binding in the extracted bindings
       let e = rmCopy t.ident e in
-      -- Bind the dependencies to the thing we want to specialize
-      -- Goes under every lambda, i.e. if we do peval (lam x. addi x y)
+      -- Bind the dependencies to the thing we want to specialize, disregarding
+      -- any outer lambdas, i.e. with specialize (lam x. addi x y)
       -- we will only look at addi x y
       let toSpec = createSpecExpr e t.body in
 
@@ -132,27 +132,20 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst + SpecializeInclu
   | ast ->
     if not (hasSpecializeTerm false ast) then (false, (mapEmpty nameCmp), ast)
     else
-    match addIdentifierToSpecializeTerms ast with (pevalData, ast) in
+    match addIdentifierToSpecializeTerms ast with (specializeData, ast) in
     match liftLambdasWithSolutions ast with (solutions, ast) in
-    -- [Name]
-    let pevalIds = mapKeys pevalData in
-    -- Map Name Expr
-    let eAsts = foldl (lam m. lam id.
-      -- Would be better if extract had an option where this can be done,
-      -- That is, instead of just storing one Expr, store one Expr per Name
-      let idset = setOfSeq nameCmp [id] in
-      let extracted = extractSpecializeTerms idset ast in
---      match eliminateDummyParameter solutions pevalData extracted
---      with (_, extracted) in
-      mapInsert id extracted m) (mapEmpty nameCmp) pevalIds in
+
+    let specializeIds : [Name] = mapKeys specializeData in
+
+    let extractMap : Map Name Expr = extractSeparate specializeIds ast in
 
     -- Bulk of the time taken
     match includeSpecializeDeps ast with (ast, nameMapName) in
     -- Find the names of the functions and constructors needed later
     let names = createNames ast nameMapName in
 
-    let args = initArgs eAsts in
-    match pevalPass names args (mapEmpty nameCmp) ast
+    let args = initArgs extractMap in
+    match specializePass names args (mapEmpty nameCmp) ast
     with (idMapping, ast) in
 
     let ast = if gti (mapLength idMapping) 0 then

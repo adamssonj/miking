@@ -4,13 +4,15 @@
 include "pmexpr/extract.mc"
 include "peval/ast.mc"
 
---include "mexpr/cmp.mc"
 include "mexpr/eq.mc"
 include "mexpr/extract.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
+
 include "stringid.mc"
+include "name.mc"
+include "map.mc"
 
 
 lang SpecializeExtract = PMExprExtractAccelerate + SpecializeAst
@@ -38,6 +40,15 @@ lang SpecializeExtract = PMExprExtractAccelerate + SpecializeAst
   sem extractSpecializeTerms ids =
   | ast -> extractAst ids ast
 
+  sem extractSeparate : [Name] -> Expr -> Map Name Expr
+  sem extractSeparate ids =| ast ->
+    foldl (lam m. lam id.
+      let idset = setOfSeq nameCmp [id] in
+      let extracted = extractSpecializeTerms idset ast in
+      mapInsert id extracted m
+    ) (mapEmpty nameCmp) ids
+
+
 end
 
 lang TestLang =
@@ -48,7 +59,7 @@ end
 mexpr
 
 -- The below tests are essentially identical to the ones in stdlib/pmexpr/extract.mc
--- But adapted to use 'peval' instead
+-- But adapted to use 'specialize' instead
 
 use TestLang in
 
@@ -56,18 +67,18 @@ let preprocess = lam t.
   typeCheck (symbolize t)
 in
 
-let extractPeval = lam t.
-  match addIdentifierToSpecializeTerms t with (pevaled, t) in
-  let ids = mapMap (lam. ()) pevaled in
+let extractSpecialize = lam t.
+  match addIdentifierToSpecializeTerms t with (specialized, t) in
+  let ids = mapMap (lam. ()) specialized in
   let t = liftLambdas t in
-  (pevaled, extractAccelerateTerms ids t)
+  (specialized, extractAccelerateTerms ids t)
 in
 
-let noPevalCalls = preprocess (bindall_ [
+let noSpecializeCalls = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   app_ (var_ "f") (int_ 2)
 ]) in
-match extractPeval noPevalCalls with (m, ast) in
+match extractSpecialize noSpecializeCalls with (m, ast) in
 utest mapSize m with 0 in
 utest ast with int_ 0 using eqExpr in
 
@@ -82,7 +93,7 @@ let extracted = preprocess (bindall_ [
   ulet_ "t" (ulam_ "t" (app_ (var_ "h") (int_ 2))),
   int_ 0
 ]) in
-match extractPeval t with (m, ast) in
+match extractSpecialize t with (m, ast) in
 
 utest mapSize m with 1 in
 utest ast with extracted using eqExpr in
@@ -99,7 +110,7 @@ let extracted = preprocess (bindall_ [
   ulet_ "t" (ulam_ "t" (app_ (var_ "g") (int_ 4))),
   int_ 0
 ]) in
-match extractPeval t with (m, ast) in
+match extractSpecialize t with (m, ast) in
 utest mapSize m with 1 in
 utest ast with extracted using eqExpr in
 
@@ -120,7 +131,7 @@ let extracted = preprocess (bindall_ [
   ulet_ "t" (ulam_ "x" (ulam_ "" (app_ (var_ "f") (var_ "x")))),
   int_ 0
 ]) in
-match extractPeval multipleCallsToSame with (m, ast) in
+match extractSpecialize multipleCallsToSame with (m, ast) in
 utest mapSize m with 2 in
 utest ast with extracted using eqExpr in
 
@@ -138,7 +149,7 @@ let extracted = preprocess (bindall_ [
   ulet_ "t" (ulam_ "t" (app_ (var_ "g") (int_ 0))),
   int_ 0
 ]) in
-match extractPeval distinctCalls with (m, ast) in
+match extractSpecialize distinctCalls with (m, ast) in
 utest mapSize m with 2 in
 utest ast with extracted using eqExpr in
 
@@ -157,10 +168,10 @@ let extracted = preprocess (bindall_ [
   ulet_ "t" (ulam_ "t" (app_ (var_ "z") (int_ 1))),
   int_ 0
 ]) in
-match extractPeval distinctCalls with (m, ast) in
+match extractSpecialize distinctCalls with (m, ast) in
 utest ast with extracted using eqExpr in
 
-let pevalVar = preprocess (bindall_ [
+let specializeVar = preprocess (bindall_ [
   ulet_ "foo" (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))),
   -- Extraction does not work in this case
   ulet_ "bar" (app_ (var_ "foo") (int_ 1)),
@@ -175,7 +186,7 @@ let expected = preprocess (bindall_ [
 ]) in
 
 
-match extractPeval pevalVar with (m, ast) in
+match extractSpecialize specializeVar with (m, ast) in
 -- utest ast with extracted using eqExpr in
 
 let inRecursiveBinding = preprocess (bindall_ [
@@ -192,7 +203,7 @@ let extracted = preprocess (bindall_ [
     ("t", ulam_ "x" (ulam_ "" (app_ (var_ "g") (var_ "x"))))],
   int_ 0
 ]) in
-match extractPeval inRecursiveBinding with (m, ast) in
+match extractSpecialize inRecursiveBinding with (m, ast) in
 utest mapSize m with 1 in
 utest ast with extracted using eqExpr in
 
@@ -205,7 +216,7 @@ let extracted = preprocess (bindall_ [
   ulet_ "t" (ulam_ "t" (app_ (var_ "g") (int_ 1))),
   int_ 0
 ]) in
-match extractPeval partialCalls with (m, ast) in
+match extractSpecialize partialCalls with (m, ast) in
 utest ast with extracted using eqExpr in
 
 ()
