@@ -82,12 +82,14 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst + SpecializeInclu
       let placeHolderPprint = nvar_ (nameMapName pnames) in
       let jitCompile = appf2_ jitCompile id placeHolderPprint in
       let pevalFunc = nvar_ (pevalName pnames) in
-      let residual = time "peval" (appf2_ pevalFunc pevalEnv pevalArg) in
-      let compiledResidual = time "jit" (app_ jitCompile residual) in
+      let tmpName = nameSym "residual" in
+      let residual = nulet_ tmpName (time "peval" (appf2_ pevalFunc pevalEnv pevalArg)) in
+      let compiledResidual = bind_ residual 
+        (time "jit" (app_ jitCompile (nvar_ tmpName))) in
       let newBody = updateBody compiledResidual t.body in
       (args.idMapping, TmLet {t with body = newBody})
-    else smapAccumL_Expr_Expr (pevalPass pnames args) idMap (TmLet t)
-  | t -> smapAccumL_Expr_Expr (pevalPass pnames args) idMap t
+    else smapAccumL_Expr_Expr (specializePass pnames args) idMap (TmLet t)
+  | t -> smapAccumL_Expr_Expr (specializePass pnames args) idMap t
 
   sem hasSpecializeTerm : Bool -> Expr -> Bool
   sem hasSpecializeTerm acc =
