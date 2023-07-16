@@ -42,7 +42,7 @@ let ocamlCompilePEval : CompileOptions -> String -> String -> CompileResult =
                  r.stdout, "\n", r.stderr, "\n"]);
     exit 1
   else ();
-  let command = ["ocamlfind", "ocamlopt", "-O3 -thread -package \"boot\""
+  let command = ["ocamlfind", "ocamlopt", "-O2 -thread -package \"boot\""
                 ,"-linkpkg -linkall", programCmxPath, "main.ml"] in
   let r = sysRunCommand command "" dir in
   if neqi r.returncode 0 then

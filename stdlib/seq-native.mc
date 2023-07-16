@@ -61,10 +61,10 @@ utest create 8 (lam. 'a') with ['a','a','a','a','a','a','a','a']
 utest create 4 (lam i. muli 2 i) with [0,2,4,6]
 utest create 0 (lam i. i) with []
 
-let length = lam s. foldl (lam acc. lam. addi acc 1) 0 s
-
-utest length [1,2,3,4] with 4
-utest length [] with 0
+--let length = lam s. foldl (lam acc. lam. addi acc 1) 0 s
+--
+--utest length [1,2,3,4] with 4
+--utest length [] with 0
 
 let get = lam seq. lam index.
   recursive let rec = lam s. lam i.
@@ -94,25 +94,25 @@ let null = lam seq.
 utest null [] with true
 utest null [1,2,3] with false
 
-let subsequence = lam seq. lam start. lam len.
-  recursive let rec = lam acc. lam s. lam i. lam len.
-    if lti i start then
-      match s with [x] ++ xs then rec acc xs (addi i 1) len
-      else acc
-    else
-      if gti len 0 then
-        match s with [] then acc
-        else match s with [x] then cons x acc
-        else match s with [x] ++ xs then rec (cons x acc) xs (addi i 1) (subi len 1)
-        else never
-      else acc
-  in if null seq then seq
-     else reverse (rec [] seq 0 len)
-
-utest subsequence [1,2,3] 0 3 with [1,2,3]
-utest subsequence (create 0 (lam i. i)) 2 5 with []
-utest subsequence [0,1,2,3,4,5] 2 2 with [2,3]
-
+--let subsequence = lam seq. lam start. lam len.
+--  recursive let rec = lam acc. lam s. lam i. lam len.
+--    if lti i start then
+--      match s with [x] ++ xs then rec acc xs (addi i 1) len
+--      else acc
+--    else
+--      if gti len 0 then
+--        match s with [] then acc
+--        else match s with [x] then cons x acc
+--        else match s with [x] ++ xs then rec (cons x acc) xs (addi i 1) (subi len 1)
+--        else never
+--      else acc
+--  in if null seq then seq
+--     else reverse (rec [] seq 0 len)
+--
+--utest subsequence [1,2,3] 0 3 with [1,2,3]
+--utest subsequence (create 0 (lam i. i)) 2 5 with []
+--utest subsequence [0,1,2,3,4,5] 2 2 with [2,3]
+--
 let splitAt = lam seq. lam i.
   recursive let rec = lam lhs. lam rhs. lam index.
     if eqi index 0 then (reverse lhs, rhs)
